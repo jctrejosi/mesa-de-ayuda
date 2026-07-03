@@ -25,7 +25,6 @@ const consoleFormat = combine(
   colorize({ all: true }),
   timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   errors({ stack: true }),
-
   printf((info) => {
     const {
       level,
@@ -39,7 +38,6 @@ const consoleFormat = combine(
       timestamp: string;
     };
     const ctx = context ? `[${context}] ` : '';
-
     const msg = `${ts} ${level}: ${ctx}${message}`;
     return stack ? `${msg}\n${stack}` : msg;
   }),
@@ -49,7 +47,6 @@ const consoleFormat = combine(
 const fileFormat = combine(
   timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   errors({ stack: true }),
-
   json(),
 );
 
@@ -181,43 +178,21 @@ class LoggerService implements ILogger {
         child.http(message, ...meta),
       debug: (message: string, ...meta: unknown[]) =>
         child.debug(message, ...meta),
-      error: function (
-        message: string,
-        context?: string,
-        ...meta: unknown[]
-      ): void {
-        throw new Error('Function not implemented.');
-      },
-      warn: function (
-        message: string,
-        context?: string,
-        ...meta: unknown[]
-      ): void {
-        throw new Error('Function not implemented.');
-      },
-      info: function (
-        message: string,
-        context?: string,
-        ...meta: unknown[]
-      ): void {
-        throw new Error('Function not implemented.');
-      },
-      http: function (
-        message: string,
-        context?: string,
-        ...meta: unknown[]
-      ): void {
-        throw new Error('Function not implemented.');
-      },
-      debug: function (
-        message: string,
-        context?: string,
-        ...meta: unknown[]
-      ): void {
-        throw new Error('Function not implemented.');
-      },
-      child: function (context: string): ILogger {
-        throw new Error('Function not implemented.');
+      child: (newContext: string) => {
+        const nestedChild = child.child({ context: newContext });
+        return {
+          error: (message: string, ...meta: unknown[]) =>
+            nestedChild.error(message, ...meta),
+          warn: (message: string, ...meta: unknown[]) =>
+            nestedChild.warn(message, ...meta),
+          info: (message: string, ...meta: unknown[]) =>
+            nestedChild.info(message, ...meta),
+          http: (message: string, ...meta: unknown[]) =>
+            nestedChild.http(message, ...meta),
+          debug: (message: string, ...meta: unknown[]) =>
+            nestedChild.debug(message, ...meta),
+          child: (nestedContext: string) => this.child(nestedContext),
+        };
       },
     };
   }
