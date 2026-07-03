@@ -37,7 +37,11 @@ export default registerAs('app', (): AppConfig => ({
     url: process.env.DATABASE_URL ?? '',
   },
   jwt: {
-    secret: process.env.JWT_SECRET ?? '',
+    secret:
+      process.env.JWT_SECRET ??
+      (() => {
+        throw new Error('JWT_SECRET is required');
+      })(),
     expiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
     refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN ?? '30d',
   },
