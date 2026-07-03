@@ -12,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { CompanyModule } from './modules/company/company.module';
 import { ConfigModule as AppConfigModule } from './modules/config/config.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ConfigModule as AppConfigModule } from './modules/config/config.module'
     AttendanceModule,
     CompanyModule,
     AppConfigModule,
+    DashboardModule,
   ],
   providers: [
     {
