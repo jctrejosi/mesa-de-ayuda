@@ -13,6 +13,7 @@ import { AttendanceModule } from './modules/attendance/attendance.module';
 import { CompanyModule } from './modules/company/company.module';
 import { ConfigModule as AppConfigModule } from './modules/config/config.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     CompanyModule,
     AppConfigModule,
     DashboardModule,
+    UsersModule,
   ],
   providers: [
     {
