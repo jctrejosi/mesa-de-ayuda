@@ -3,7 +3,6 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
-  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { db } from '../../database/drizzle';
@@ -24,10 +23,11 @@ import {
   AttendanceStats,
 } from './interfaces/attendance.interface';
 import { calculateDistance } from '../../utils/geolocation';
+import { createContextLogger } from '../../utils/logger';
 
 @Injectable()
 export class AttendanceService {
-  private readonly logger = new Logger(AttendanceService.name);
+  private readonly logger = createContextLogger('AttendanceService');
 
   constructor(private readonly configService: ConfigService) {}
 

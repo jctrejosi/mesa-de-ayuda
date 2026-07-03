@@ -34,3 +34,44 @@ export function isWithinRadius(
   const distance = calculateDistance(lat1, lon1, lat2, lon2);
   return distance <= radiusMeters;
 }
+
+/**
+ * Valida si las coordenadas son válidas
+ */
+export function isValidCoordinates(
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+): boolean {
+  if (latitude === null || latitude === undefined) return false;
+  if (longitude === null || longitude === undefined) return false;
+  if (isNaN(latitude) || isNaN(longitude)) return false;
+  if (latitude < -90 || latitude > 90) return false;
+  if (longitude < -180 || longitude > 180) return false;
+  return true;
+}
+
+/**
+ * Obtiene la precisión de GPS en texto
+ */
+export function getGpsPrecisionLabel(accuracy: number | null): {
+  label: string;
+  color: string;
+} {
+  if (accuracy === null || accuracy === undefined) {
+    return { label: 'No disponible', color: 'bg-gray-100 text-gray-500' };
+  }
+
+  if (accuracy <= 5) {
+    return { label: 'Excelente', color: 'bg-green-100 text-green-700' };
+  }
+
+  if (accuracy <= 15) {
+    return { label: 'Buena', color: 'bg-blue-100 text-blue-700' };
+  }
+
+  if (accuracy <= 30) {
+    return { label: 'Regular', color: 'bg-yellow-100 text-yellow-700' };
+  }
+
+  return { label: 'Baja', color: 'bg-red-100 text-red-700' };
+}
