@@ -2,104 +2,146 @@ import {
   Injectable,
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
+  Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { db } from '../../database/drizzle';
-import { attendance, branch, employee } from '../../database/schema';
-import { eq, and, between, desc, sql } from 'drizzle-orm';
+import {
+  attendance,
+  employee,
+  branch,
+  person,
+  type Attendance,
+  type NewAttendance,
+} from '../../database/schema';
+import { eq, and, between, desc, asc, sql, gte, lte } from 'drizzle-orm';
 import { RegisterAttendanceDto } from './dto/register-attendance.dto';
 import { QueryAttendanceDto } from './dto/query-attendance.dto';
-import { calculateDistance, isWithinRadius } from '../../utils/geolocation';
+import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import {
+  AttendanceValidationResult,
+  AttendanceStats,
+} from './interfaces/attendance.interface';
+import { calculateDistance } from '../../utils/geolocation';
 
 @Injectable()
 export class AttendanceService {
-  async register(employeeId: number, dto: RegisterAttendanceDto) {
-    // 1. Validar que el empleado existe
-    const employees = await db
-      .select()
-      .from(employee)
-      .where(eq(employee.id, employeeId))
-      .limit(1);
+  private readonly logger = new Logger(AttendanceService.name);
 
-    if (!employees.length) {
-      throw new BadRequestException('Empleado no encontrado');
-    }
+  constructor(private readonly configService: ConfigService) {}
 
-    const employeeData = employees[0];
+  /**
+   * Registra una nueva asistencia
+   */
+  async register(
+    employeeId: number,
+    dto: RegisterAttendanceDto,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    distance?: number;
+    checkType: string;
+    attendanceId?: number;
+  }> {
+    // 1. Verificar que el empleado existe y está activo
+    const employeeData = await this.validateEmployee(employeeId);
 
-    // 2. Obtener la sucursal del empleado
     if (!employeeData.branchId) {
       throw new BadRequestException(
         'El empleado no tiene una sucursal asignada',
       );
     }
 
-    const branches = await db
-      .select()
-      .from(branch)
-      .where(eq(branch.id, employeeData.branchId))
-      .limit(1);
+    // 2. Obtener la sucursal
+    const branchData = await this.validateBranch(employeeData.branchId);
 
-    if (!branches.length) {
-      throw new BadRequestException('Sucursal no encontrada');
-    }
+    // 3. Validar ubicación si se enviaron coordenadas
+    let distance: number | undefined;
+    let isWithinRadius = true;
 
-    const branchData = branches[0];
-
-    // 3. Validar geolocalización
-    if (dto.latitude && dto.longitude) {
-      const distance = calculateDistance(
-        Number(branchData.latitude),
-        Number(branchData.longitude),
+    if (dto.latitude !== undefined && dto.longitude !== undefined) {
+      const validation = this.validateLocation(
         dto.latitude,
         dto.longitude,
+        branchData.latitude,
+        branchData.longitude,
+        branchData.allowedRadius,
       );
 
-      const radius = branchData.allowedRadius || 50;
+      isWithinRadius = validation.isWithinRadius;
+      distance = validation.distance;
 
-      if (distance > radius) {
-        throw new ForbiddenException(
-          `Fuera del área permitida. Distancia: ${Math.round(distance)}m (máximo ${radius}m)`,
-        );
+      if (!isWithinRadius) {
+        throw new ForbiddenException({
+          message: 'Fuera del área permitida',
+          distance: Math.round(distance || 0),
+          maxRadius: branchData.allowedRadius || 50,
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+        });
       }
-
-      // Guardar con la distancia calculada
-      const newAttendance = await db.insert(attendance).values({
-        employeeId,
-        branchId: branchData.id,
-        checkType: dto.checkType,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        accuracy: dto.accuracy,
-        distance: distance,
-        ip: dto.ip,
-        device: dto.device,
-      });
-
-      return {
-        success: true,
-        message: 'Asistencia registrada correctamente',
-        distance: Math.round(distance),
-        checkType: dto.checkType,
-      };
-    } else {
-      // Registro sin GPS (manual)
-      const newAttendance = await db.insert(attendance).values({
-        employeeId,
-        branchId: branchData.id,
-        checkType: dto.checkType,
-        ip: dto.ip,
-        device: dto.device,
-      });
-
-      return {
-        success: true,
-        message: 'Asistencia registrada manualmente',
-        checkType: dto.checkType,
-      };
     }
+
+    // 4. Verificar que no tenga un registro duplicado del mismo tipo hoy
+    const today = new Date();
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1,
+    );
+
+    const existing = await db
+      .select()
+      .from(attendance)
+      .where(
+        and(
+          eq(attendance.employeeId, employeeId),
+          eq(attendance.checkType, dto.checkType as any),
+          between(attendance.createdAt, startOfDay, endOfDay),
+        ),
+      );
+
+    if (existing.length > 0) {
+      throw new BadRequestException(
+        `Ya registraste ${this.getCheckTypeLabel(dto.checkType).toLowerCase()} hoy`,
+      );
+    }
+
+    // 5. Crear el registro
+    const newAttendance: NewAttendance = {
+      employeeId,
+      branchId: branchData.id,
+      checkType: dto.checkType,
+      latitude: dto.latitude ? String(dto.latitude) : null,
+      longitude: dto.longitude ? String(dto.longitude) : null,
+      accuracy: dto.accuracy ?? null,
+      distance: distance ?? null,
+      ip: dto.ip ?? null,
+      device: dto.device ?? null,
+    };
+
+    const result = await db.insert(attendance).values(newAttendance);
+    const insertId = Number(result[0]?.insertId || 0);
+
+    return {
+      success: true,
+      message: `Asistencia de ${this.getCheckTypeLabel(dto.checkType).toLowerCase()} registrada exitosamente`,
+      distance: distance ? Math.round(distance) : undefined,
+      checkType: dto.checkType,
+      attendanceId: insertId,
+    };
   }
 
-  async getTodayAttendance(employeeId: number) {
+  /**
+   * Obtiene la asistencia de hoy para un empleado
+   */
+  async getTodayAttendance(employeeId: number): Promise<Attendance[]> {
     const today = new Date();
     const startOfDay = new Date(
       today.getFullYear(),
@@ -126,40 +168,259 @@ export class AttendanceService {
     return records;
   }
 
-  async getHistory(employeeId: number, query: QueryAttendanceDto) {
-    const { startDate, endDate, limit = 50, offset = 0 } = query;
-
+  /**
+   * Obtiene el historial de asistencia con paginación
+   */
+  async getHistory(
+    employeeId: number,
+    query: QueryAttendanceDto,
+  ): Promise<{
+    records: Attendance[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
     const conditions = [eq(attendance.employeeId, employeeId)];
 
-    if (startDate) {
-      conditions.push(sql`${attendance.createdAt} >= ${new Date(startDate)}`);
+    if (query.startDate) {
+      const startDate = new Date(query.startDate);
+      startDate.setHours(0, 0, 0, 0);
+      conditions.push(gte(attendance.createdAt, startDate));
     }
-    if (endDate) {
-      conditions.push(sql`${attendance.createdAt} <= ${new Date(endDate)}`);
+
+    if (query.endDate) {
+      const endDate = new Date(query.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(lte(attendance.createdAt, endDate));
     }
+
+    if (query.type) {
+      conditions.push(eq(attendance.checkType, query.type as any));
+    }
+
+    const orderByField =
+      query.orderBy === 'createdAt'
+        ? attendance.createdAt
+        : query.orderBy === 'checkType'
+          ? attendance.checkType
+          : query.orderBy === 'distance'
+            ? attendance.distance
+            : attendance.createdAt;
+
+    const orderDirection = query.orderDirection === 'ASC' ? asc : desc;
 
     const records = await db
       .select()
       .from(attendance)
       .where(and(...conditions))
-      .orderBy(desc(attendance.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .orderBy(orderDirection(orderByField))
+      .limit(query.limit ?? 50)
+      .offset(query.offset ?? 0);
 
-    const total = await db
-      .select({ count: sql<number>`count(*)` })
+    const totalResult = await db
+      .select({ total: sql<number>`COUNT(*)` })
       .from(attendance)
       .where(and(...conditions));
 
     return {
       records,
-      total: total[0]?.count || 0,
-      limit,
-      offset,
+      total: Number(totalResult[0]?.total || 0),
+      limit: query.limit ?? 50,
+      offset: query.offset ?? 0,
     };
   }
 
-  async canRegister(employeeId: number, type: string) {
+  /**
+   * Obtiene un registro de asistencia por ID
+   */
+  async findById(id: number): Promise<Attendance | null> {
+    const results = await db
+      .select()
+      .from(attendance)
+      .where(eq(attendance.id, id))
+      .limit(1);
+
+    return results[0] || null;
+  }
+
+  /**
+   * Obtiene un registro de asistencia con relaciones
+   */
+  async findByIdWithRelations(id: number): Promise<{
+    record: Attendance;
+    employee?: {
+      id: number;
+      code: string | null;
+      fullName: string;
+    };
+    branch?: {
+      id: number;
+      name: string;
+      address: string | null;
+      latitude: string | null;
+      longitude: string | null;
+    };
+  } | null> {
+    const results = await db
+      .select({
+        record: attendance,
+        employeeId: employee.id,
+        employeeCode: employee.employeeCode,
+        personFirstName: person.firstName,
+        personMiddleName: person.middleName,
+        personLastName: person.lastName,
+        personSecondLastName: person.secondLastName,
+        branchId: branch.id,
+        branchName: branch.name,
+        branchAddress: branch.address,
+        branchLatitude: branch.latitude,
+        branchLongitude: branch.longitude,
+      })
+      .from(attendance)
+      .leftJoin(employee, eq(attendance.employeeId, employee.id))
+      .leftJoin(person, eq(employee.personId, person.id))
+      .leftJoin(branch, eq(attendance.branchId, branch.id))
+      .where(eq(attendance.id, id))
+      .limit(1);
+
+    if (!results.length) {
+      return null;
+    }
+
+    const row = results[0];
+
+    const fullName = [
+      row.personFirstName,
+      row.personMiddleName,
+      row.personLastName,
+      row.personSecondLastName,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return {
+      record: row.record,
+      employee: row.employeeId
+        ? {
+            id: row.employeeId,
+            code: row.employeeCode,
+            fullName: fullName || 'Sin nombre',
+          }
+        : undefined,
+      branch: row.branchId
+        ? {
+            id: row.branchId,
+            name: row.branchName || 'Sin nombre',
+            address: row.branchAddress,
+            latitude: row.branchLatitude,
+            longitude: row.branchLongitude,
+          }
+        : undefined,
+    };
+  }
+
+  /**
+   * Actualiza un registro de asistencia (solo admin)
+   */
+  async update(id: number, dto: UpdateAttendanceDto): Promise<Attendance> {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw new NotFoundException(
+        `Registro de asistencia con ID ${id} no encontrado`,
+      );
+    }
+
+    const updateData: Partial<NewAttendance> = {};
+
+    if (dto.checkType) updateData.checkType = dto.checkType;
+    if (dto.latitude !== undefined) updateData.latitude = String(dto.latitude);
+    if (dto.longitude !== undefined)
+      updateData.longitude = String(dto.longitude);
+    if (dto.accuracy !== undefined) updateData.accuracy = dto.accuracy;
+    if (dto.distance !== undefined) updateData.distance = dto.distance;
+    if (dto.ip) updateData.ip = dto.ip;
+    if (dto.device) updateData.device = dto.device;
+    if (dto.branchId) updateData.branchId = dto.branchId;
+
+    await db.update(attendance).set(updateData).where(eq(attendance.id, id));
+
+    const updated = await this.findById(id);
+    return updated!;
+  }
+
+  /**
+   * Elimina un registro de asistencia (solo admin)
+   */
+  async delete(id: number): Promise<boolean> {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw new NotFoundException(
+        `Registro de asistencia con ID ${id} no encontrado`,
+      );
+    }
+
+    await db.delete(attendance).where(eq(attendance.id, id));
+
+    return true;
+  }
+
+  /**
+   * Obtiene estadísticas de asistencia para un empleado
+   */
+  async getStats(employeeId: number): Promise<AttendanceStats> {
+    const today = new Date();
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    const allRecords = await db
+      .select()
+      .from(attendance)
+      .where(eq(attendance.employeeId, employeeId));
+
+    const todayRecords = allRecords.filter(
+      (r) => r.createdAt && new Date(r.createdAt) >= startOfDay,
+    );
+
+    const weekRecords = allRecords.filter(
+      (r) => r.createdAt && new Date(r.createdAt) >= startOfWeek,
+    );
+
+    const monthRecords = allRecords.filter(
+      (r) => r.createdAt && new Date(r.createdAt) >= startOfMonth,
+    );
+
+    return {
+      total: allRecords.length,
+      entries: allRecords.filter((r) => r.checkType === 'ENTRY').length,
+      exits: allRecords.filter((r) => r.checkType === 'EXIT').length,
+      breaks: allRecords.filter(
+        (r) => r.checkType === 'BREAK_START' || r.checkType === 'BREAK_END',
+      ).length,
+      todayCount: todayRecords.length,
+      weekCount: weekRecords.length,
+      monthCount: monthRecords.length,
+    };
+  }
+
+  /**
+   * Verifica si un empleado puede registrar hoy
+   */
+  async canRegister(
+    employeeId: number,
+    type: string,
+  ): Promise<{
+    canRegister: boolean;
+    alreadyRegistered: boolean;
+    type: string;
+    message?: string;
+  }> {
     const today = new Date();
     const startOfDay = new Date(
       today.getFullYear(),
@@ -172,7 +433,6 @@ export class AttendanceService {
       today.getDate() + 1,
     );
 
-    // Verificar si ya registró hoy
     const existing = await db
       .select()
       .from(attendance)
@@ -188,6 +448,128 @@ export class AttendanceService {
       canRegister: existing.length === 0,
       alreadyRegistered: existing.length > 0,
       type,
+      message:
+        existing.length > 0
+          ? `Ya registraste ${this.getCheckTypeLabel(type).toLowerCase()} hoy`
+          : `Puedes registrar ${this.getCheckTypeLabel(type).toLowerCase()}`,
     };
+  }
+
+  // ============================================================
+  // MÉTODOS PRIVADOS
+  // ============================================================
+
+  /**
+   * Valida que el empleado exista y esté activo
+   */
+  private async validateEmployee(employeeId: number) {
+    const results = await db
+      .select()
+      .from(employee)
+      .where(eq(employee.id, employeeId))
+      .limit(1);
+
+    if (!results.length) {
+      throw new BadRequestException(
+        `Empleado con ID ${employeeId} no encontrado`,
+      );
+    }
+
+    const employeeData = results[0];
+
+    if (employeeData.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        `El empleado no está activo. Estado: ${employeeData.status}`,
+      );
+    }
+
+    return employeeData;
+  }
+
+  /**
+   * Valida que la sucursal exista y esté activa
+   */
+  private async validateBranch(branchId: number) {
+    const results = await db
+      .select()
+      .from(branch)
+      .where(eq(branch.id, branchId))
+      .limit(1);
+
+    if (!results.length) {
+      throw new BadRequestException(
+        `Sucursal con ID ${branchId} no encontrada`,
+      );
+    }
+
+    const branchData = results[0];
+
+    if (!branchData.active) {
+      throw new BadRequestException('La sucursal no está activa');
+    }
+
+    return branchData;
+  }
+
+  /**
+   * Valida la ubicación del empleado vs la sucursal
+   */
+  private validateLocation(
+    latitude: number,
+    longitude: number,
+    branchLatitude: string | null,
+    branchLongitude: string | null,
+    allowedRadius: number | null,
+  ): AttendanceValidationResult {
+    if (!branchLatitude || !branchLongitude) {
+      return {
+        isValid: false,
+        isWithinRadius: false,
+        message: 'La sucursal no tiene coordenadas configuradas',
+      };
+    }
+
+    const branchLat = parseFloat(branchLatitude);
+    const branchLon = parseFloat(branchLongitude);
+
+    if (isNaN(branchLat) || isNaN(branchLon)) {
+      return {
+        isValid: false,
+        isWithinRadius: false,
+        message: 'Coordenadas de la sucursal inválidas',
+      };
+    }
+
+    const radius = allowedRadius || 50;
+    const distance = calculateDistance(
+      latitude,
+      longitude,
+      branchLat,
+      branchLon,
+    );
+    const isWithin = distance <= radius;
+
+    return {
+      isValid: isWithin,
+      distance,
+      maxRadius: radius,
+      isWithinRadius: isWithin,
+      message: isWithin
+        ? `Ubicación válida. Distancia: ${Math.round(distance)}m`
+        : `Fuera del área permitida. Distancia: ${Math.round(distance)}m (máximo ${radius}m)`,
+    };
+  }
+
+  /**
+   * Obtiene el label legible del tipo de registro
+   */
+  private getCheckTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      ENTRY: 'Entrada',
+      EXIT: 'Salida',
+      BREAK_START: 'Inicio de descanso',
+      BREAK_END: 'Fin de descanso',
+    };
+    return labels[type] || type;
   }
 }
