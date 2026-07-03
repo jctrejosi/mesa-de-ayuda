@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   mysqlTable,
   bigint,
@@ -50,3 +48,6 @@ export const attendanceRelations = relations(attendance, ({ one }) => ({
     references: [branch.id],
   }),
 }));
+
+export type Attendance = typeof attendance.$inferSelect;
+export type NewAttendance = typeof attendance.$inferInsert;
