@@ -38,14 +38,6 @@ export class RegisterAttendanceDto {
   accuracy?: number;
 
   @IsOptional()
-  @IsString({ message: 'El IP debe ser un texto' })
-  ip?: string;
-
-  @IsOptional()
-  @IsString({ message: 'El dispositivo debe ser un texto' })
-  device?: string;
-
-  @IsOptional()
   @IsString({ message: 'El user-agent debe ser un texto' })
   userAgent?: string;
 }

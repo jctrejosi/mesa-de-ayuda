@@ -7,6 +7,7 @@ import {
   boolean,
   timestamp,
   index,
+  mysqlEnum,
 } from 'drizzle-orm/mysql-core';
 import { relations } from 'drizzle-orm';
 import { employee } from './employee.schema';
@@ -18,6 +19,9 @@ export const account = mysqlTable(
     employeeId: bigint('employee_id', { mode: 'number' }).notNull(),
     username: varchar('username', { length: 60 }).unique().notNull(),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+    role: mysqlEnum('role', ['admin', 'manager', 'employee'])
+      .default('employee')
+      .notNull(),
     failedAttempts: int('failed_attempts').default(0),
     lockedUntil: datetime('locked_until'),
     lastLogin: datetime('last_login'),

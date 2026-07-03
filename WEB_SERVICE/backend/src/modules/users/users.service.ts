@@ -47,6 +47,8 @@ export interface UserListResponse {
   totalPages: number;
 }
 
+type DrizzleCondition = ReturnType<typeof eq> | ReturnType<typeof and>;
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -77,7 +79,7 @@ export class UsersService {
     } = query;
     const offset = (page - 1) * limit;
 
-    const conditions: Parameters<typeof and> = [];
+    const conditions: DrizzleCondition[] = [];
 
     if (search) {
       conditions.push(
@@ -287,7 +289,9 @@ export class UsersService {
       }
     }
 
-    // 4. Validar que la sucursal existe (si se proporciona)
+    // 4. Validar la consistencia de la empresa
+    let companyId: number | null = null;
+
     if (data.branchId) {
       const branchExists = await this.companyService.findBranchById(
         data.branchId,
@@ -297,9 +301,9 @@ export class UsersService {
           `Sucursal con ID ${data.branchId} no encontrada`,
         );
       }
+      companyId = branchExists.companyId;
     }
 
-    // 5. Validar que el departamento existe (si se proporciona)
     if (data.departmentId) {
       const deptExists = await this.companyService.findDepartmentById(
         data.departmentId,
@@ -309,9 +313,16 @@ export class UsersService {
           `Departamento con ID ${data.departmentId} no encontrado`,
         );
       }
+      if (companyId !== null && deptExists.companyId !== companyId) {
+        throw new BadRequestException(
+          'El departamento no pertenece a la misma empresa que la sucursal',
+        );
+      }
+      if (companyId === null) {
+        companyId = deptExists.companyId;
+      }
     }
 
-    // 6. Validar que el cargo existe (si se proporciona)
     if (data.positionId) {
       const posExists = await this.companyService.findPositionById(
         data.positionId,
@@ -321,7 +332,15 @@ export class UsersService {
           `Cargo con ID ${data.positionId} no encontrado`,
         );
       }
+      if (companyId !== null && posExists.companyId !== companyId) {
+        throw new BadRequestException(
+          'El cargo no pertenece a la misma empresa que la sucursal',
+        );
+      }
     }
+
+    // Si hay departamento o cargo pero no sucursal, permitirlo (solo validamos consistencia)
+    // Si no hay sucursal pero hay departamento/cargo, no hay problema
 
     // 7. Crear la persona
     const newPerson: NewPerson = {
@@ -381,6 +400,7 @@ export class UsersService {
       employeeId,
       username: data.username,
       passwordHash: hashedPassword,
+      role: data.role || 'employee',
       failedAttempts: 0,
       lockedUntil: null,
       lastLogin: null,
@@ -533,6 +553,10 @@ export class UsersService {
         this.bcryptSaltRounds,
       );
     }
+    const accountData = data as UpdateUserDto & { role?: Account['role'] };
+    if (accountData.role !== undefined) {
+      accountUpdate.role = accountData.role;
+    }
     if (data.active !== undefined) accountUpdate.active = data.active;
 
     if (Object.keys(accountUpdate).length > 0) {
@@ -671,7 +695,7 @@ export class UsersService {
     byStatus: { status: string; count: number }[];
     byRole: { role: string; count: number }[];
   }> {
-    // Total de cuentas activas
+    // Total de cuentas
     const totalResult = await this.db
       .select({ count: sql<number>`COUNT(*)` })
       .from(account);
@@ -695,15 +719,14 @@ export class UsersService {
       .from(employee)
       .groupBy(employee.status);
 
-    // Estadísticas por rol (simplificado - sin tabla de roles por ahora)
-    // Podemos usar el status del empleado como "rol" en la versión simplificada
+    // Estadísticas por rol de cuenta
     const byRole = await this.db
       .select({
-        role: sql<string>`'employee'`,
+        role: account.role,
         count: sql<number>`COUNT(*)`,
       })
-      .from(employee)
-      .where(eq(employee.status, 'ACTIVE'));
+      .from(account)
+      .groupBy(account.role);
 
     return {
       total: Number(totalResult[0]?.count || 0),

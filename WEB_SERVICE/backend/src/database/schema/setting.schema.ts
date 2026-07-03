@@ -6,6 +6,7 @@ export const setting = mysqlTable('setting', {
   settingValue: text('setting_value'),
   settingType: varchar('setting_type', { length: 30 }),
   description: varchar('description', { length: 255 }),
+  companyId: bigint('company_id', { mode: 'number' }),
 });
 
 export type Setting = typeof setting.$inferSelect;

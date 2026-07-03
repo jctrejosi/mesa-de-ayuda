@@ -24,6 +24,7 @@ export const branch = mysqlTable(
     timezone: varchar('timezone', { length: 50 }),
     active: boolean('active').default(true),
     createdAt: timestamp('created_at').defaultNow().notNull(),
+    requireGeolocation: boolean('require_geolocation').default(true),
   },
   (table) => ({
     companyIdx: index('idx_branch_company').on(table.companyId),

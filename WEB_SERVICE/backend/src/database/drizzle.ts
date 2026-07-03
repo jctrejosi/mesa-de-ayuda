@@ -20,9 +20,18 @@ export function initializeDatabase(
     return dbInstance;
   }
 
-  const databaseUrl = configService.get<string>('app.database.url');
+  // Intentar obtener la URL de diferentes fuentes
+  let databaseUrl = configService.get<string>('app.database.url');
+
+  // Fallback a process.env directamente si no está en la configuración
   if (!databaseUrl) {
-    throw new Error('DATABASE_URL is not defined');
+    databaseUrl = process.env.DATABASE_URL;
+  }
+
+  if (!databaseUrl) {
+    throw new Error(
+      'DATABASE_URL is not defined. Please check your .env file or environment variables.',
+    );
   }
 
   const pool = mysql.createPool({

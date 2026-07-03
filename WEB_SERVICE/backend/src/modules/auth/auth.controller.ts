@@ -39,7 +39,7 @@ export class AuthController {
   @Public()
   @Post('microsoft')
   @HttpCode(HttpStatus.OK)
-  async microsoftLogin(@Body() microsoftDto: MicrosoftLoginDto) {
+  microsoftLogin(@Body() microsoftDto: MicrosoftLoginDto) {
     return this.authService.microsoftLogin(microsoftDto);
   }
 
@@ -71,7 +71,10 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@CurrentUser() user: AuthenticatedUser) {
-    return this.authService.logout(user.sub);
+  async logout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body?: { refreshToken?: string },
+  ) {
+    return this.authService.logout(user.sub, body?.refreshToken);
   }
 }

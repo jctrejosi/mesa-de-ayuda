@@ -11,3 +11,4 @@ export * from './attendance.schema';
 export * from './setting.schema';
 export * from './file.schema';
 export * from './audit-log.schema';
+export * from './refresh-token.schema';

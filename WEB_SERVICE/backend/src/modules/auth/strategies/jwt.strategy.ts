@@ -21,7 +21,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Verificar que el usuario existe y está activo
     const db = getDb();
     const accounts = await db
-      .select()
+      .select({
+        role: account.role,
+        active: account.active,
+      })
       .from(account)
       .where(eq(account.id, payload.sub))
       .limit(1);
@@ -34,6 +37,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       sub: payload.sub,
       username: payload.username,
       employeeId: payload.employeeId,
+      role: accounts[0].role,
     };
   }
 }

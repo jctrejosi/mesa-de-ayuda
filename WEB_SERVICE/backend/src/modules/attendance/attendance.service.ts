@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { db } from '../../database/drizzle';
+import { getDb } from '../../database/drizzle';
 import {
   attendance,
   employee,
@@ -25,11 +25,20 @@ import {
 import { calculateDistance } from '../../utils/geolocation';
 import { createContextLogger } from '../../utils/logger';
 
+type AttendanceCheckType = 'ENTRY' | 'EXIT' | 'BREAK_START' | 'BREAK_END';
+
+// Tipo para las condiciones de Drizzle
+type DrizzleCondition = ReturnType<typeof eq> | ReturnType<typeof and>;
+
 @Injectable()
 export class AttendanceService {
   private readonly logger = createContextLogger('AttendanceService');
 
   constructor(private readonly configService: ConfigService) {}
+
+  private get db() {
+    return getDb();
+  }
 
   /**
    * Registra una nueva asistencia
@@ -37,11 +46,13 @@ export class AttendanceService {
   async register(
     employeeId: number,
     dto: RegisterAttendanceDto,
+    ip: string,
+    userAgent: string,
   ): Promise<{
     success: boolean;
     message: string;
     distance?: number;
-    checkType: string;
+    checkType: AttendanceCheckType;
     attendanceId?: number;
   }> {
     // 1. Verificar que el empleado existe y está activo
@@ -83,7 +94,17 @@ export class AttendanceService {
       }
     }
 
-    // 4. Verificar que no tenga un registro duplicado del mismo tipo hoy
+    // 4. Verificar si requiere geolocalización
+    if (
+      branchData.requireGeolocation &&
+      (dto.latitude === undefined || dto.longitude === undefined)
+    ) {
+      throw new BadRequestException(
+        'Esta sucursal requiere geolocalización para registrar asistencia',
+      );
+    }
+
+    // 5. Verificar que no tenga un registro duplicado del mismo tipo hoy
     const today = new Date();
     const startOfDay = new Date(
       today.getFullYear(),
@@ -96,13 +117,13 @@ export class AttendanceService {
       today.getDate() + 1,
     );
 
-    const existing = await db
+    const existing = await this.db
       .select()
       .from(attendance)
       .where(
         and(
           eq(attendance.employeeId, employeeId),
-          eq(attendance.checkType, dto.checkType as any),
+          eq(attendance.checkType, dto.checkType),
           between(attendance.createdAt, startOfDay, endOfDay),
         ),
       );
@@ -113,21 +134,25 @@ export class AttendanceService {
       );
     }
 
-    // 5. Crear el registro
+    // 6. Crear el registro
     const newAttendance: NewAttendance = {
       employeeId,
       branchId: branchData.id,
       checkType: dto.checkType,
-      latitude: dto.latitude ? String(dto.latitude) : null,
-      longitude: dto.longitude ? String(dto.longitude) : null,
+      latitude: dto.latitude !== undefined ? String(dto.latitude) : null,
+      longitude: dto.longitude !== undefined ? String(dto.longitude) : null,
       accuracy: dto.accuracy ?? null,
       distance: distance ?? null,
-      ip: dto.ip ?? null,
-      device: dto.device ?? null,
+      ip: ip,
+      device: userAgent,
     };
 
-    const result = await db.insert(attendance).values(newAttendance);
+    const result = await this.db.insert(attendance).values(newAttendance);
     const insertId = Number(result[0]?.insertId || 0);
+
+    this.logger.info(
+      `Asistencia registrada: ${dto.checkType} para empleado ${employeeId} (ID: ${insertId})`,
+    );
 
     return {
       success: true,
@@ -154,7 +179,7 @@ export class AttendanceService {
       today.getDate() + 1,
     );
 
-    const records = await db
+    const records = await this.db
       .select()
       .from(attendance)
       .where(
@@ -180,7 +205,11 @@ export class AttendanceService {
     limit: number;
     offset: number;
   }> {
-    const conditions = [eq(attendance.employeeId, employeeId)];
+    const conditions: DrizzleCondition[] = [];
+
+    if (employeeId > 0) {
+      conditions.push(eq(attendance.employeeId, employeeId));
+    }
 
     if (query.startDate) {
       const startDate = new Date(query.startDate);
@@ -195,7 +224,11 @@ export class AttendanceService {
     }
 
     if (query.type) {
-      conditions.push(eq(attendance.checkType, query.type as any));
+      conditions.push(eq(attendance.checkType, query.type));
+    }
+
+    if (query.branchId) {
+      conditions.push(eq(attendance.branchId, query.branchId));
     }
 
     const orderByField =
@@ -209,18 +242,20 @@ export class AttendanceService {
 
     const orderDirection = query.orderDirection === 'ASC' ? asc : desc;
 
-    const records = await db
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const records = await this.db
       .select()
       .from(attendance)
-      .where(and(...conditions))
+      .where(whereClause)
       .orderBy(orderDirection(orderByField))
       .limit(query.limit ?? 50)
       .offset(query.offset ?? 0);
 
-    const totalResult = await db
+    const totalResult = await this.db
       .select({ total: sql<number>`COUNT(*)` })
       .from(attendance)
-      .where(and(...conditions));
+      .where(whereClause);
 
     return {
       records,
@@ -234,7 +269,7 @@ export class AttendanceService {
    * Obtiene un registro de asistencia por ID
    */
   async findById(id: number): Promise<Attendance | null> {
-    const results = await db
+    const results = await this.db
       .select()
       .from(attendance)
       .where(eq(attendance.id, id))
@@ -261,7 +296,7 @@ export class AttendanceService {
       longitude: string | null;
     };
   } | null> {
-    const results = await db
+    const results = await this.db
       .select({
         record: attendance,
         employeeId: employee.id,
@@ -342,7 +377,10 @@ export class AttendanceService {
     if (dto.device) updateData.device = dto.device;
     if (dto.branchId) updateData.branchId = dto.branchId;
 
-    await db.update(attendance).set(updateData).where(eq(attendance.id, id));
+    await this.db
+      .update(attendance)
+      .set(updateData)
+      .where(eq(attendance.id, id));
 
     const updated = await this.findById(id);
     return updated!;
@@ -359,8 +397,9 @@ export class AttendanceService {
       );
     }
 
-    await db.delete(attendance).where(eq(attendance.id, id));
+    await this.db.delete(attendance).where(eq(attendance.id, id));
 
+    this.logger.info(`Registro de asistencia eliminado: ID ${id}`);
     return true;
   }
 
@@ -379,7 +418,7 @@ export class AttendanceService {
     startOfWeek.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    const allRecords = await db
+    const allRecords = await this.db
       .select()
       .from(attendance)
       .where(eq(attendance.employeeId, employeeId));
@@ -433,13 +472,13 @@ export class AttendanceService {
       today.getDate() + 1,
     );
 
-    const existing = await db
+    const existing = await this.db
       .select()
       .from(attendance)
       .where(
         and(
           eq(attendance.employeeId, employeeId),
-          eq(attendance.checkType, type as any),
+          eq(attendance.checkType, type as AttendanceCheckType),
           between(attendance.createdAt, startOfDay, endOfDay),
         ),
       );
@@ -463,7 +502,7 @@ export class AttendanceService {
    * Valida que el empleado exista y esté activo
    */
   private async validateEmployee(employeeId: number) {
-    const results = await db
+    const results = await this.db
       .select()
       .from(employee)
       .where(eq(employee.id, employeeId))
@@ -490,7 +529,7 @@ export class AttendanceService {
    * Valida que la sucursal exista y esté activa
    */
   private async validateBranch(branchId: number) {
-    const results = await db
+    const results = await this.db
       .select()
       .from(branch)
       .where(eq(branch.id, branchId))

@@ -11,7 +11,9 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { AttendanceService } from './attendance.service';
 import { RegisterAttendanceDto } from './dto/register-attendance.dto';
 import { QueryAttendanceDto } from './dto/query-attendance.dto';
@@ -22,7 +24,15 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../interfaces/request.interface';
 
-@Controller('attendance')
+// Interfaz para la request con los campos que necesitamos
+type RequestWithIp = Omit<Request, 'connection'> & {
+  ip: string;
+  connection?: {
+    remoteAddress?: string;
+  };
+};
+
+@Controller('attendance') // <-- ESTE DECORADOR ES OBLIGATORIO
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
@@ -39,8 +49,20 @@ export class AttendanceController {
   async register(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RegisterAttendanceDto,
+    @Req() req: RequestWithIp,
   ) {
-    return this.attendanceService.register(user.employeeId, dto);
+    // Obtener IP real (priorizando x-forwarded-for para proxies)
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const ip = forwardedFor
+      ? (Array.isArray(forwardedFor)
+          ? forwardedFor[0]
+          : forwardedFor.split(',')[0]
+        ).trim()
+      : req.ip || req.connection?.remoteAddress || 'unknown';
+
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    return this.attendanceService.register(user.employeeId, dto, ip, userAgent);
   }
 
   /**

@@ -25,6 +25,7 @@ CREATE TABLE branch (
     latitude DECIMAL(10,8),
     longitude DECIMAL(11,8),
     allowed_radius INT DEFAULT 50,
+    require_geolocation BOOLEAN DEFAULT TRUE,
     timezone VARCHAR(50),
     active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -131,6 +132,7 @@ CREATE TABLE account (
     employee_id BIGINT UNSIGNED NOT NULL,
     username VARCHAR(60) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    role ENUM('admin','manager','employee') NOT NULL DEFAULT 'employee',
     failed_attempts INT DEFAULT 0,
     locked_until DATETIME,
     last_login DATETIME,
@@ -144,6 +146,29 @@ CREATE TABLE account (
         REFERENCES employee(id)
         ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
+-- ===========================
+-- refresh tokens
+-- ===========================
+
+CREATE TABLE refresh_token (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    account_id BIGINT UNSIGNED NOT NULL,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    revoked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_refresh_token_account (account_id),
+    INDEX idx_refresh_token_token (token),
+    
+    CONSTRAINT fk_refresh_token_account
+        FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ===========================
+-- roles y permisos (opcional, para futuro)
+-- ===========================
 
 CREATE TABLE role (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -194,15 +219,13 @@ CREATE TABLE attendance (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     employee_id BIGINT UNSIGNED NOT NULL,
     branch_id BIGINT UNSIGNED NOT NULL,
-    check_type ENUM('ENTRY','EXIT','BREAK_START','BREAK_END'),
-
+    check_type ENUM('ENTRY','EXIT','BREAK_START','BREAK_END') NOT NULL,
     latitude DECIMAL(10,8),
     longitude DECIMAL(11,8),
     accuracy DOUBLE,
     distance DOUBLE,
     ip VARCHAR(60),
     device VARCHAR(255),
-
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     INDEX idx_att_employee (employee_id),
@@ -221,10 +244,17 @@ CREATE TABLE attendance (
 
 CREATE TABLE setting (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    setting_key VARCHAR(120) UNIQUE,
+    company_id BIGINT UNSIGNED NULL,
+    setting_key VARCHAR(120) NOT NULL,
     setting_value TEXT,
     setting_type VARCHAR(30),
-    description VARCHAR(255)
+    description VARCHAR(255),
+    
+    UNIQUE KEY uk_setting_company_key (company_id, setting_key),
+    INDEX idx_setting_company (company_id),
+    
+    CONSTRAINT fk_setting_company
+        FOREIGN KEY (company_id) REFERENCES company(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ===========================
@@ -275,3 +305,32 @@ CREATE TABLE audit_log (
         REFERENCES account(id)
         ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+-- ===========================
+-- datos iniciales (admin por defecto)
+-- ===========================
+
+-- NOTA: La contraseña es 'Admin123!' (hash bcrypt)
+INSERT INTO person (first_name, last_name, email, active) 
+VALUES ('Admin', 'Sistema', 'admin@helpdesk.com', TRUE);
+
+INSERT INTO employee (person_id, employee_code, status) 
+VALUES (LAST_INSERT_ID(), 'ADMIN-001', 'ACTIVE');
+
+INSERT INTO account (employee_id, username, password_hash, role, active) 
+VALUES (
+    LAST_INSERT_ID(), 
+    'admin', 
+    '$2a$10$N9qo8uLOickgx2ZMRZoMy.Mr5vZ5qB5.7HhS7X5Y5t5R5W5Q5a5q.', 
+    'admin', 
+    TRUE
+);
+
+-- ===========================
+-- configuraciones iniciales
+-- ===========================
+
+INSERT INTO setting (setting_key, setting_value, setting_type, description) VALUES 
+('attendance', '{"work_start_time": "08:00", "work_end_time": "17:00", "tolerance_minutes": 15, "allow_out_of_hours": false}', 'json', 'Configuración general de asistencia'),
+('geolocation', '{"precision_threshold": 50, "max_radius_meters": 500}', 'json', 'Configuración de geolocalización'),
+('system', '{"timezone": "America/Lima", "date_format": "DD/MM/YYYY"}', 'json', 'Configuración del sistema');

@@ -166,4 +166,10 @@ export class CreateUserDto {
   @IsBoolean({ message: 'El campo activo debe ser un booleano' })
   @Type(() => Boolean)
   active?: boolean;
+
+  @IsOptional()
+  @IsEnum(['admin', 'manager', 'employee'], {
+    message: 'El rol debe ser: admin, manager o employee',
+  })
+  role?: 'admin' | 'manager' | 'employee';
 }

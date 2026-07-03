@@ -1,10 +1,10 @@
 import { Request } from 'express';
 
 export interface AuthenticatedUser {
-  sub: number; // account.id
+  sub: number;
   username: string;
   employeeId: number;
-  role?: string; // opcional, si se carga desde la BD
+  role: 'admin' | 'manager' | 'employee';
 }
 
 export interface AuthenticatedRequest extends Request {

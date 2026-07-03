@@ -448,12 +448,10 @@ export default registerAs('app', (): AppConfig => ({
   port: parseInt(process.env.PORT ?? '3000', 10),
   nodeEnv: process.env.NODE_ENV ?? 'development',
   database: {
-    url:
-      process.env.DATABASE_URL ??
-      'mysql://root:password@localhost:3306/helpdesk',
+    url: process.env.DATABASE_URL ?? '',
   },
   jwt: {
-    secret: process.env.JWT_SECRET ?? 'secret-key-change-me',
+    secret: process.env.JWT_SECRET ?? '',
     expiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
     refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN ?? '30d',
   },
@@ -495,9 +493,18 @@ export function initializeDatabase(
     return dbInstance;
   }
 
-  const databaseUrl = configService.get<string>('app.database.url');
+  // Intentar obtener la URL de diferentes fuentes
+  let databaseUrl = configService.get<string>('app.database.url');
+
+  // Fallback a process.env directamente si no estÃ¡ en la configuraciÃ³n
   if (!databaseUrl) {
-    throw new Error('DATABASE_URL is not defined');
+    databaseUrl = process.env.DATABASE_URL;
+  }
+
+  if (!databaseUrl) {
+    throw new Error(
+      'DATABASE_URL is not defined. Please check your .env file or environment variables.',
+    );
   }
 
   const pool = mysql.createPool({
@@ -544,6 +551,7 @@ import {
   boolean,
   timestamp,
   index,
+  mysqlEnum,
 } from 'drizzle-orm/mysql-core';
 import { relations } from 'drizzle-orm';
 import { employee } from './employee.schema';
@@ -555,6 +563,9 @@ export const account = mysqlTable(
     employeeId: bigint('employee_id', { mode: 'number' }).notNull(),
     username: varchar('username', { length: 60 }).unique().notNull(),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+    role: mysqlEnum('role', ['admin', 'manager', 'employee'])
+      .default('employee')
+      .notNull(),
     failedAttempts: int('failed_attempts').default(0),
     lockedUntil: datetime('locked_until'),
     lastLogin: datetime('last_login'),
@@ -703,6 +714,7 @@ export const branch = mysqlTable(
     timezone: varchar('timezone', { length: 50 }),
     active: boolean('active').default(true),
     createdAt: timestamp('created_at').defaultNow().notNull(),
+    requireGeolocation: boolean('require_geolocation').default(true),
   },
   (table) => ({
     companyIdx: index('idx_branch_company').on(table.companyId),
@@ -886,6 +898,7 @@ export * from './attendance.schema';
 export * from './setting.schema';
 export * from './file.schema';
 export * from './audit-log.schema';
+export * from './refresh-token.schema';
 ----- src\database\schema\permission.schema.ts -----
 import { mysqlTable, bigint, varchar } from 'drizzle-orm/mysql-core';
 
@@ -967,6 +980,44 @@ export const positionRelations = relations(position, ({ one }) => ({
 
 export type Position = typeof position.$inferSelect;
 export type NewPosition = typeof position.$inferInsert;
+----- src\database\schema\refresh-token.schema.ts -----
+import {
+  mysqlTable,
+  bigint,
+  varchar,
+  datetime,
+  boolean,
+  timestamp,
+  index,
+} from 'drizzle-orm/mysql-core';
+import { relations } from 'drizzle-orm';
+import { account } from './account.schema';
+
+export const refreshToken = mysqlTable(
+  'refresh_token',
+  {
+    id: bigint('id', { mode: 'number' }).autoincrement().primaryKey(),
+    accountId: bigint('account_id', { mode: 'number' }).notNull(),
+    token: varchar('token', { length: 255 }).unique().notNull(),
+    expiresAt: datetime('expires_at').notNull(),
+    revoked: boolean('revoked').default(false),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    accountIdx: index('idx_refresh_token_account').on(table.accountId),
+    tokenIdx: index('idx_refresh_token_token').on(table.token),
+  }),
+);
+
+export const refreshTokenRelations = relations(refreshToken, ({ one }) => ({
+  account: one(account, {
+    fields: [refreshToken.accountId],
+    references: [account.id],
+  }),
+}));
+
+export type RefreshToken = typeof refreshToken.$inferSelect;
+export type NewRefreshToken = typeof refreshToken.$inferInsert;
 ----- src\database\schema\role.schema.ts -----
 import { mysqlTable, bigint, varchar, text } from 'drizzle-orm/mysql-core';
 
@@ -987,6 +1038,7 @@ export const setting = mysqlTable('setting', {
   settingValue: text('setting_value'),
   settingType: varchar('setting_type', { length: 30 }),
   description: varchar('description', { length: 255 }),
+  companyId: bigint('company_id', { mode: 'number' }),
 });
 
 export type Setting = typeof setting.$inferSelect;
@@ -997,10 +1049,10 @@ export * from './request.interface';
 import { Request } from 'express';
 
 export interface AuthenticatedUser {
-  sub: number; // account.id
+  sub: number;
   username: string;
   employeeId: number;
-  role?: string; // opcional, si se carga desde la BD
+  role: 'admin' | 'manager' | 'employee';
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -1028,7 +1080,9 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { AttendanceService } from './attendance.service';
 import { RegisterAttendanceDto } from './dto/register-attendance.dto';
 import { QueryAttendanceDto } from './dto/query-attendance.dto';
@@ -1039,7 +1093,15 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../interfaces/request.interface';
 
-@Controller('attendance')
+// Interfaz para la request con los campos que necesitamos
+type RequestWithIp = Omit<Request, 'connection'> & {
+  ip: string;
+  connection?: {
+    remoteAddress?: string;
+  };
+};
+
+@Controller('attendance') // <-- ESTE DECORADOR ES OBLIGATORIO
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
@@ -1056,8 +1118,20 @@ export class AttendanceController {
   async register(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RegisterAttendanceDto,
+    @Req() req: RequestWithIp,
   ) {
-    return this.attendanceService.register(user.employeeId, dto);
+    // Obtener IP real (priorizando x-forwarded-for para proxies)
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const ip = forwardedFor
+      ? (Array.isArray(forwardedFor)
+          ? forwardedFor[0]
+          : forwardedFor.split(',')[0]
+        ).trim()
+      : req.ip || req.connection?.remoteAddress || 'unknown';
+
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    return this.attendanceService.register(user.employeeId, dto, ip, userAgent);
   }
 
   /**
@@ -1169,7 +1243,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { db } from '../../database/drizzle';
+import { getDb } from '../../database/drizzle';
 import {
   attendance,
   employee,
@@ -1189,11 +1263,20 @@ import {
 import { calculateDistance } from '../../utils/geolocation';
 import { createContextLogger } from '../../utils/logger';
 
+type AttendanceCheckType = 'ENTRY' | 'EXIT' | 'BREAK_START' | 'BREAK_END';
+
+// Tipo para las condiciones de Drizzle
+type DrizzleCondition = ReturnType<typeof eq> | ReturnType<typeof and>;
+
 @Injectable()
 export class AttendanceService {
   private readonly logger = createContextLogger('AttendanceService');
 
   constructor(private readonly configService: ConfigService) {}
+
+  private get db() {
+    return getDb();
+  }
 
   /**
    * Registra una nueva asistencia
@@ -1201,11 +1284,13 @@ export class AttendanceService {
   async register(
     employeeId: number,
     dto: RegisterAttendanceDto,
+    ip: string,
+    userAgent: string,
   ): Promise<{
     success: boolean;
     message: string;
     distance?: number;
-    checkType: string;
+    checkType: AttendanceCheckType;
     attendanceId?: number;
   }> {
     // 1. Verificar que el empleado existe y estÃ¡ activo
@@ -1247,7 +1332,17 @@ export class AttendanceService {
       }
     }
 
-    // 4. Verificar que no tenga un registro duplicado del mismo tipo hoy
+    // 4. Verificar si requiere geolocalizaciÃ³n
+    if (
+      branchData.requireGeolocation &&
+      (dto.latitude === undefined || dto.longitude === undefined)
+    ) {
+      throw new BadRequestException(
+        'Esta sucursal requiere geolocalizaciÃ³n para registrar asistencia',
+      );
+    }
+
+    // 5. Verificar que no tenga un registro duplicado del mismo tipo hoy
     const today = new Date();
     const startOfDay = new Date(
       today.getFullYear(),
@@ -1260,13 +1355,13 @@ export class AttendanceService {
       today.getDate() + 1,
     );
 
-    const existing = await db
+    const existing = await this.db
       .select()
       .from(attendance)
       .where(
         and(
           eq(attendance.employeeId, employeeId),
-          eq(attendance.checkType, dto.checkType as any),
+          eq(attendance.checkType, dto.checkType),
           between(attendance.createdAt, startOfDay, endOfDay),
         ),
       );
@@ -1277,21 +1372,25 @@ export class AttendanceService {
       );
     }
 
-    // 5. Crear el registro
+    // 6. Crear el registro
     const newAttendance: NewAttendance = {
       employeeId,
       branchId: branchData.id,
       checkType: dto.checkType,
-      latitude: dto.latitude ? String(dto.latitude) : null,
-      longitude: dto.longitude ? String(dto.longitude) : null,
+      latitude: dto.latitude !== undefined ? String(dto.latitude) : null,
+      longitude: dto.longitude !== undefined ? String(dto.longitude) : null,
       accuracy: dto.accuracy ?? null,
       distance: distance ?? null,
-      ip: dto.ip ?? null,
-      device: dto.device ?? null,
+      ip: ip,
+      device: userAgent,
     };
 
-    const result = await db.insert(attendance).values(newAttendance);
+    const result = await this.db.insert(attendance).values(newAttendance);
     const insertId = Number(result[0]?.insertId || 0);
+
+    this.logger.info(
+      `Asistencia registrada: ${dto.checkType} para empleado ${employeeId} (ID: ${insertId})`,
+    );
 
     return {
       success: true,
@@ -1318,7 +1417,7 @@ export class AttendanceService {
       today.getDate() + 1,
     );
 
-    const records = await db
+    const records = await this.db
       .select()
       .from(attendance)
       .where(
@@ -1344,7 +1443,11 @@ export class AttendanceService {
     limit: number;
     offset: number;
   }> {
-    const conditions = [eq(attendance.employeeId, employeeId)];
+    const conditions: DrizzleCondition[] = [];
+
+    if (employeeId > 0) {
+      conditions.push(eq(attendance.employeeId, employeeId));
+    }
 
     if (query.startDate) {
       const startDate = new Date(query.startDate);
@@ -1359,7 +1462,11 @@ export class AttendanceService {
     }
 
     if (query.type) {
-      conditions.push(eq(attendance.checkType, query.type as any));
+      conditions.push(eq(attendance.checkType, query.type));
+    }
+
+    if (query.branchId) {
+      conditions.push(eq(attendance.branchId, query.branchId));
     }
 
     const orderByField =
@@ -1373,18 +1480,20 @@ export class AttendanceService {
 
     const orderDirection = query.orderDirection === 'ASC' ? asc : desc;
 
-    const records = await db
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const records = await this.db
       .select()
       .from(attendance)
-      .where(and(...conditions))
+      .where(whereClause)
       .orderBy(orderDirection(orderByField))
       .limit(query.limit ?? 50)
       .offset(query.offset ?? 0);
 
-    const totalResult = await db
+    const totalResult = await this.db
       .select({ total: sql<number>`COUNT(*)` })
       .from(attendance)
-      .where(and(...conditions));
+      .where(whereClause);
 
     return {
       records,
@@ -1398,7 +1507,7 @@ export class AttendanceService {
    * Obtiene un registro de asistencia por ID
    */
   async findById(id: number): Promise<Attendance | null> {
-    const results = await db
+    const results = await this.db
       .select()
       .from(attendance)
       .where(eq(attendance.id, id))
@@ -1425,7 +1534,7 @@ export class AttendanceService {
       longitude: string | null;
     };
   } | null> {
-    const results = await db
+    const results = await this.db
       .select({
         record: attendance,
         employeeId: employee.id,
@@ -1506,7 +1615,10 @@ export class AttendanceService {
     if (dto.device) updateData.device = dto.device;
     if (dto.branchId) updateData.branchId = dto.branchId;
 
-    await db.update(attendance).set(updateData).where(eq(attendance.id, id));
+    await this.db
+      .update(attendance)
+      .set(updateData)
+      .where(eq(attendance.id, id));
 
     const updated = await this.findById(id);
     return updated!;
@@ -1523,8 +1635,9 @@ export class AttendanceService {
       );
     }
 
-    await db.delete(attendance).where(eq(attendance.id, id));
+    await this.db.delete(attendance).where(eq(attendance.id, id));
 
+    this.logger.info(`Registro de asistencia eliminado: ID ${id}`);
     return true;
   }
 
@@ -1543,7 +1656,7 @@ export class AttendanceService {
     startOfWeek.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    const allRecords = await db
+    const allRecords = await this.db
       .select()
       .from(attendance)
       .where(eq(attendance.employeeId, employeeId));
@@ -1597,13 +1710,13 @@ export class AttendanceService {
       today.getDate() + 1,
     );
 
-    const existing = await db
+    const existing = await this.db
       .select()
       .from(attendance)
       .where(
         and(
           eq(attendance.employeeId, employeeId),
-          eq(attendance.checkType, type as any),
+          eq(attendance.checkType, type as AttendanceCheckType),
           between(attendance.createdAt, startOfDay, endOfDay),
         ),
       );
@@ -1627,7 +1740,7 @@ export class AttendanceService {
    * Valida que el empleado exista y estÃ© activo
    */
   private async validateEmployee(employeeId: number) {
-    const results = await db
+    const results = await this.db
       .select()
       .from(employee)
       .where(eq(employee.id, employeeId))
@@ -1654,7 +1767,7 @@ export class AttendanceService {
    * Valida que la sucursal exista y estÃ© activa
    */
   private async validateBranch(branchId: number) {
-    const results = await db
+    const results = await this.db
       .select()
       .from(branch)
       .where(eq(branch.id, branchId))
@@ -1838,14 +1951,6 @@ export class RegisterAttendanceDto {
   accuracy?: number;
 
   @IsOptional()
-  @IsString({ message: 'El IP debe ser un texto' })
-  ip?: string;
-
-  @IsOptional()
-  @IsString({ message: 'El dispositivo debe ser un texto' })
-  device?: string;
-
-  @IsOptional()
   @IsString({ message: 'El user-agent debe ser un texto' })
   userAgent?: string;
 }
@@ -1981,7 +2086,7 @@ export class AuthController {
   @Public()
   @Post('microsoft')
   @HttpCode(HttpStatus.OK)
-  async microsoftLogin(@Body() microsoftDto: MicrosoftLoginDto) {
+  microsoftLogin(@Body() microsoftDto: MicrosoftLoginDto) {
     return this.authService.microsoftLogin(microsoftDto);
   }
 
@@ -2013,8 +2118,11 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@CurrentUser() user: AuthenticatedUser) {
-    return this.authService.logout(user.sub);
+  async logout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body?: { refreshToken?: string },
+  ) {
+    return this.authService.logout(user.sub, body?.refreshToken);
   }
 }
 ----- src\modules\auth\auth.module.ts -----
@@ -2067,17 +2175,18 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { compare } from 'bcryptjs';
 import { getDb } from '../../database/drizzle';
-import { account, employee, person } from '../../database/schema';
-import { eq } from 'drizzle-orm';
+import { account, employee, person, refreshToken } from '../../database/schema';
+import { eq, and } from 'drizzle-orm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { MicrosoftLoginDto } from './dto/microsoft-login.dto';
+import type { NewRefreshToken } from '../../database/schema/refresh-token.schema';
 
 export interface JwtPayload {
   sub: number; // account.id
   username: string;
   employeeId: number;
-  role?: string;
+  role?: 'admin' | 'manager' | 'employee';
 }
 
 export interface TokenResponse {
@@ -2096,13 +2205,21 @@ export interface LoginResponse {
     employeeId: number;
     fullName: string;
     email?: string | null;
-    role?: string;
+    role?: 'admin' | 'manager' | 'employee';
   };
 }
+
+type AccountUpdateData = {
+  failedAttempts: number;
+  lockedUntil?: Date | null;
+  lastLogin?: Date;
+};
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly MAX_LOGIN_ATTEMPTS = 5;
+  private readonly LOCK_DURATION_MINUTES = 15;
 
   constructor(
     private readonly jwtService: JwtService,
@@ -2114,7 +2231,7 @@ export class AuthService {
   }
 
   /**
-   * Autentica un usuario por username y password
+   * Autentica un usuario por username y password con bloqueo por intentos fallidos
    */
   async validateUser(
     username: string,
@@ -2139,6 +2256,23 @@ export class AuthService {
 
     const userAccount = accounts[0];
 
+    // Verificar si la cuenta estÃ¡ bloqueada
+    if (
+      userAccount.lockedUntil &&
+      new Date(userAccount.lockedUntil) > new Date()
+    ) {
+      const remainingMinutes = Math.ceil(
+        (new Date(userAccount.lockedUntil).getTime() - Date.now()) /
+          (60 * 1000),
+      );
+      this.logger.warn(
+        `Intento de login fallido: usuario "${username}" bloqueado por ${remainingMinutes} minutos`,
+      );
+      throw new UnauthorizedException(
+        `Cuenta bloqueada temporalmente. Intente nuevamente en ${remainingMinutes} minutos.`,
+      );
+    }
+
     if (!userAccount.active) {
       this.logger.warn(
         `Intento de login fallido: usuario "${username}" inactivo`,
@@ -2154,24 +2288,38 @@ export class AuthService {
       return null;
     }
 
-    const comparePassword = compare as (
-      plainText: string,
-      hashedPassword: string,
-    ) => Promise<boolean>;
-
-    const isPasswordValid = await comparePassword(password, passwordHash);
+    const isPasswordValid = await (
+      compare as (data: string, encrypted: string) => Promise<boolean>
+    )(password, passwordHash);
 
     if (!isPasswordValid) {
       this.logger.warn(
         `Intento de login fallido: contraseÃ±a incorrecta para "${username}"`,
       );
+
       // Incrementar intentos fallidos
+      const newAttempts = (userAccount.failedAttempts || 0) + 1;
+      const updateData: AccountUpdateData = { failedAttempts: newAttempts };
+
+      // Bloquear si supera el lÃ­mite
+      if (newAttempts >= this.MAX_LOGIN_ATTEMPTS) {
+        const lockedUntil = new Date(
+          Date.now() + this.LOCK_DURATION_MINUTES * 60 * 1000,
+        );
+        updateData.lockedUntil = lockedUntil;
+        this.logger.warn(
+          `Usuario "${username}" bloqueado por ${this.LOCK_DURATION_MINUTES} minutos (${newAttempts} intentos fallidos)`,
+        );
+        throw new UnauthorizedException(
+          `Demasiados intentos fallidos. Cuenta bloqueada por ${this.LOCK_DURATION_MINUTES} minutos.`,
+        );
+      }
+
       await this.db
         .update(account)
-        .set({
-          failedAttempts: (userAccount.failedAttempts || 0) + 1,
-        })
+        .set(updateData)
         .where(eq(account.id, userAccount.id));
+
       return null;
     }
 
@@ -2180,6 +2328,7 @@ export class AuthService {
       .update(account)
       .set({
         failedAttempts: 0,
+        lockedUntil: null,
         lastLogin: new Date(),
       })
       .where(eq(account.id, userAccount.id));
@@ -2244,14 +2393,33 @@ export class AuthService {
       sub: userData.account.id,
       username: userData.account.username,
       employeeId: userData.account.employeeId,
+      role: userData.account.role,
     };
 
     const accessToken = this.jwtService.sign(payload);
-    const refreshToken = this.generateRefreshToken(payload);
+    const refreshTokenString = this.generateRefreshToken(payload);
+
+    // Guardar refresh token en BD
+    const expiresAt = new Date(
+      Date.now() +
+        this.parseDurationToSeconds(
+          this.configService.get<string>('app.jwt.refreshExpiresIn') ?? '30d',
+        ) *
+          1000,
+    );
+
+    const newRefreshToken: NewRefreshToken = {
+      accountId: userData.account.id,
+      token: refreshTokenString,
+      expiresAt,
+      revoked: false,
+    };
+
+    await this.db.insert(refreshToken).values(newRefreshToken);
 
     return {
       accessToken,
-      refreshToken,
+      refreshToken: refreshTokenString,
       expiresIn: this.getJwtExpiration(),
       user: {
         id: userData.account.id,
@@ -2259,6 +2427,7 @@ export class AuthService {
         employeeId: userData.account.employeeId,
         fullName: fullName || 'Usuario',
         email: userData.person.email,
+        role: userData.account.role,
       },
     };
   }
@@ -2266,7 +2435,7 @@ export class AuthService {
   /**
    * Login con Microsoft SSO
    */
-  microsoftLogin(_: MicrosoftLoginDto): Promise<LoginResponse> {
+  microsoftLogin(_: MicrosoftLoginDto): LoginResponse {
     void _;
 
     // TODO: Implementar verificaciÃ³n con Microsoft Graph API
@@ -2280,7 +2449,7 @@ export class AuthService {
   }
 
   /**
-   * Refresca el token de acceso
+   * Refresca el token de acceso con validaciÃ³n en BD
    */
   async refreshToken(refreshTokenDto: RefreshTokenDto): Promise<{
     accessToken: string;
@@ -2291,22 +2460,54 @@ export class AuthService {
 
       if (!jwtSecret) {
         this.logger.error('JWT secret no configurado');
-        throw new UnauthorizedException('Usuario no vÃ¡lido');
+        throw new UnauthorizedException('ConfiguraciÃ³n invÃ¡lida');
       }
 
-      const refreshToken = refreshTokenDto.refreshToken;
+      const tokenString = refreshTokenDto.refreshToken;
 
-      if (!refreshToken) {
+      if (!tokenString) {
         this.logger.warn('Refresh token no provisto');
         throw new UnauthorizedException('Refresh token invÃ¡lido o expirado');
       }
 
-      // Validar el refresh token
-      const payload = this.jwtService.verify<JwtPayload>(refreshToken, {
+      // 1. Verificar en BD que existe, no estÃ¡ revocado y no expirÃ³
+      const storedTokens = await this.db
+        .select()
+        .from(refreshToken)
+        .where(eq(refreshToken.token, tokenString))
+        .limit(1);
+
+      if (!storedTokens.length) {
+        this.logger.warn('Refresh token no encontrado en BD');
+        throw new UnauthorizedException('Refresh token invÃ¡lido');
+      }
+
+      const storedToken = storedTokens[0];
+
+      if (storedToken.revoked) {
+        this.logger.warn(
+          `Refresh token revocado para account ID ${storedToken.accountId}`,
+        );
+        throw new UnauthorizedException('Refresh token revocado');
+      }
+
+      if (new Date(storedToken.expiresAt) < new Date()) {
+        this.logger.warn(
+          `Refresh token expirado para account ID ${storedToken.accountId}`,
+        );
+        // Eliminar token expirado
+        await this.db
+          .delete(refreshToken)
+          .where(eq(refreshToken.id, storedToken.id));
+        throw new UnauthorizedException('Refresh token expirado');
+      }
+
+      // 2. Validar el payload del token
+      const payload = this.jwtService.verify<JwtPayload>(tokenString, {
         secret: jwtSecret,
       });
 
-      // Verificar que el usuario existe
+      // 3. Verificar que el usuario existe y estÃ¡ activo
       const accounts = await this.db
         .select()
         .from(account)
@@ -2314,14 +2515,21 @@ export class AuthService {
         .limit(1);
 
       if (!accounts.length || !accounts[0].active) {
+        this.logger.warn(`Usuario ${payload.sub} no vÃ¡lido o inactivo`);
+        // Revocar todos los tokens del usuario
+        await this.db
+          .update(refreshToken)
+          .set({ revoked: true })
+          .where(eq(refreshToken.accountId, payload.sub));
         throw new UnauthorizedException('Usuario no vÃ¡lido');
       }
 
-      // Generar nuevo access token
+      // 4. Generar nuevo access token
       const newPayload: JwtPayload = {
         sub: payload.sub,
         username: payload.username,
         employeeId: payload.employeeId,
+        role: accounts[0].role,
       };
 
       const accessToken = this.jwtService.sign(newPayload);
@@ -2338,6 +2546,9 @@ export class AuthService {
             ? error
             : JSON.stringify(error);
       this.logger.error(`Error al refrescar token: ${message}`);
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Refresh token invÃ¡lido o expirado');
     }
   }
@@ -2388,15 +2599,47 @@ export class AuthService {
   }
 
   /**
-   * Cierra la sesiÃ³n (logout)
+   * Cierra la sesiÃ³n (logout) y revoca el refresh token
    */
-  logout(accountId: number): Promise<{ success: boolean; message: string }> {
-    // En un sistema con refresh tokens almacenados, aquÃ­ se invalidarÃ­a el token
-    this.logger.log(`Logout para account ID ${accountId}`);
-    return Promise.resolve({
+  async logout(
+    accountId: number,
+    refreshTokenString?: string,
+  ): Promise<{ success: boolean; message: string }> {
+    if (refreshTokenString) {
+      // Revocar solo el token especÃ­fico
+      const result = await this.db
+        .update(refreshToken)
+        .set({ revoked: true })
+        .where(
+          and(
+            eq(refreshToken.token, refreshTokenString),
+            eq(refreshToken.accountId, accountId),
+          ),
+        );
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (result[0]?.affectedRows === 0) {
+        this.logger.warn(
+          `Intento de logout con token invÃ¡lido para account ${accountId}`,
+        );
+      } else {
+        this.logger.log(`Refresh token revocado para account ID ${accountId}`);
+      }
+    } else {
+      // Revocar todos los tokens del usuario (logout en todos los dispositivos)
+      await this.db
+        .update(refreshToken)
+        .set({ revoked: true })
+        .where(eq(refreshToken.accountId, accountId));
+      this.logger.log(
+        `Todos los refresh tokens revocados para account ID ${accountId}`,
+      );
+    }
+
+    return {
       success: true,
       message: 'SesiÃ³n cerrada exitosamente',
-    });
+    };
   }
 
   /**
@@ -2406,7 +2649,6 @@ export class AuthService {
     const refreshExpiresIn =
       this.configService.get<string>('app.jwt.refreshExpiresIn') ?? '30d';
 
-    // Usar un objeto de opciones con tipo any para evitar conflictos de tipos
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const options: any = {
       expiresIn: refreshExpiresIn,
@@ -2421,8 +2663,7 @@ export class AuthService {
   private getJwtExpiration(): number {
     const expiresIn =
       this.configService.get<string>('app.jwt.expiresIn') ?? '7d';
-    const seconds = this.parseDurationToSeconds(expiresIn);
-    return seconds;
+    return this.parseDurationToSeconds(expiresIn);
   }
 
   /**
@@ -2517,7 +2758,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Verificar que el usuario existe y estÃ¡ activo
     const db = getDb();
     const accounts = await db
-      .select()
+      .select({
+        role: account.role,
+        active: account.active,
+      })
       .from(account)
       .where(eq(account.id, payload.sub))
       .limit(1);
@@ -2530,6 +2774,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       sub: payload.sub,
       username: payload.username,
       employeeId: payload.employeeId,
+      role: accounts[0].role,
     };
   }
 }
@@ -4459,6 +4704,8 @@ export interface UserListResponse {
   totalPages: number;
 }
 
+type DrizzleCondition = ReturnType<typeof eq> | ReturnType<typeof and>;
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -4489,7 +4736,7 @@ export class UsersService {
     } = query;
     const offset = (page - 1) * limit;
 
-    const conditions: Parameters<typeof and> = [];
+    const conditions: DrizzleCondition[] = [];
 
     if (search) {
       conditions.push(
@@ -4699,7 +4946,9 @@ export class UsersService {
       }
     }
 
-    // 4. Validar que la sucursal existe (si se proporciona)
+    // 4. Validar la consistencia de la empresa
+    let companyId: number | null = null;
+
     if (data.branchId) {
       const branchExists = await this.companyService.findBranchById(
         data.branchId,
@@ -4709,9 +4958,9 @@ export class UsersService {
           `Sucursal con ID ${data.branchId} no encontrada`,
         );
       }
+      companyId = branchExists.companyId;
     }
 
-    // 5. Validar que el departamento existe (si se proporciona)
     if (data.departmentId) {
       const deptExists = await this.companyService.findDepartmentById(
         data.departmentId,
@@ -4721,9 +4970,16 @@ export class UsersService {
           `Departamento con ID ${data.departmentId} no encontrado`,
         );
       }
+      if (companyId !== null && deptExists.companyId !== companyId) {
+        throw new BadRequestException(
+          'El departamento no pertenece a la misma empresa que la sucursal',
+        );
+      }
+      if (companyId === null) {
+        companyId = deptExists.companyId;
+      }
     }
 
-    // 6. Validar que el cargo existe (si se proporciona)
     if (data.positionId) {
       const posExists = await this.companyService.findPositionById(
         data.positionId,
@@ -4733,7 +4989,15 @@ export class UsersService {
           `Cargo con ID ${data.positionId} no encontrado`,
         );
       }
+      if (companyId !== null && posExists.companyId !== companyId) {
+        throw new BadRequestException(
+          'El cargo no pertenece a la misma empresa que la sucursal',
+        );
+      }
     }
+
+    // Si hay departamento o cargo pero no sucursal, permitirlo (solo validamos consistencia)
+    // Si no hay sucursal pero hay departamento/cargo, no hay problema
 
     // 7. Crear la persona
     const newPerson: NewPerson = {
@@ -4793,6 +5057,7 @@ export class UsersService {
       employeeId,
       username: data.username,
       passwordHash: hashedPassword,
+      role: data.role || 'employee',
       failedAttempts: 0,
       lockedUntil: null,
       lastLogin: null,
@@ -4945,6 +5210,10 @@ export class UsersService {
         this.bcryptSaltRounds,
       );
     }
+    const accountData = data as UpdateUserDto & { role?: Account['role'] };
+    if (accountData.role !== undefined) {
+      accountUpdate.role = accountData.role;
+    }
     if (data.active !== undefined) accountUpdate.active = data.active;
 
     if (Object.keys(accountUpdate).length > 0) {
@@ -5083,7 +5352,7 @@ export class UsersService {
     byStatus: { status: string; count: number }[];
     byRole: { role: string; count: number }[];
   }> {
-    // Total de cuentas activas
+    // Total de cuentas
     const totalResult = await this.db
       .select({ count: sql<number>`COUNT(*)` })
       .from(account);
@@ -5107,15 +5376,14 @@ export class UsersService {
       .from(employee)
       .groupBy(employee.status);
 
-    // EstadÃ­sticas por rol (simplificado - sin tabla de roles por ahora)
-    // Podemos usar el status del empleado como "rol" en la versiÃ³n simplificada
+    // EstadÃ­sticas por rol de cuenta
     const byRole = await this.db
       .select({
-        role: sql<string>`'employee'`,
+        role: account.role,
         count: sql<number>`COUNT(*)`,
       })
-      .from(employee)
-      .where(eq(employee.status, 'ACTIVE'));
+      .from(account)
+      .groupBy(account.role);
 
     return {
       total: Number(totalResult[0]?.count || 0),
@@ -5301,6 +5569,12 @@ export class CreateUserDto {
   @IsBoolean({ message: 'El campo activo debe ser un booleano' })
   @Type(() => Boolean)
   active?: boolean;
+
+  @IsOptional()
+  @IsEnum(['admin', 'manager', 'employee'], {
+    message: 'El rol debe ser: admin, manager o employee',
+  })
+  role?: 'admin' | 'manager' | 'employee';
 }
 ----- src\modules\users\dto\update-user.dto.ts -----
 import {
