@@ -347,9 +347,14 @@ export class AuthService {
   private generateRefreshToken(payload: JwtPayload): string {
     const refreshExpiresIn =
       this.configService.get<string>('app.jwt.refreshExpiresIn') ?? '30d';
-    return this.jwtService.sign(payload, {
-      expiresIn: refreshExpiresIn as number | string,
-    });
+
+    // Usar un objeto de opciones con tipo any para evitar conflictos de tipos
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const options: any = {
+      expiresIn: refreshExpiresIn,
+    };
+
+    return this.jwtService.sign(payload, options);
   }
 
   /**
