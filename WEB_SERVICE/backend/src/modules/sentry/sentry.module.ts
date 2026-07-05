@@ -2,7 +2,6 @@ import { Global, Module, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import * as Sentry from '@sentry/node';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
 
 @Global()
 @Module({})
@@ -25,8 +24,6 @@ export class SentryModule implements OnModuleInit {
       environment: this.configService.get('NODE_ENV', 'development'),
 
       release: this.configService.get('SENTRY_RELEASE', '1.0.0'),
-
-      integrations: [nodeProfilingIntegration()],
 
       tracesSampleRate: this.configService.get(
         'SENTRY_TRACES_SAMPLE_RATE',

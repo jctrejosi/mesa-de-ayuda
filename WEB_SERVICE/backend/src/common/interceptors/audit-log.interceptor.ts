@@ -6,116 +6,129 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { AuditLogService } from '../../modules/audit/audit-log.service';
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    sub?: number;
+    username?: string;
+  };
+}
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
   constructor(private readonly auditLogService: AuditLogService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    const request = context.switchToHttp().getRequest<Request>();
-    const response = context.switchToHttp().getResponse();
-    const handler = context.getHandler();
+  intercept(
+    context: ExecutionContext,
+    next: CallHandler<unknown>,
+  ): Observable<unknown> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+
+    const response = context.switchToHttp().getResponse<Response>();
+
     const controller = context.getClass();
 
-    // Solo registrar métodos de escritura (POST, PUT, PATCH, DELETE)
+    // Solo registrar métodos de escritura
     const method = request.method;
+
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       return next.handle();
     }
 
-    // Obtener información del usuario autenticado
-    const user = (request as any).user;
-    const accountId = user?.sub || null;
+    const accountId = request.user?.sub ?? null;
 
-    // Obtener IP real
     const forwardedFor = request.headers['x-forwarded-for'];
-    const ip = forwardedFor
-      ? (Array.isArray(forwardedFor)
-          ? forwardedFor[0]
-          : forwardedFor.split(',')[0]
-        ).trim()
-      : request.ip || request.connection?.remoteAddress || 'unknown';
 
-    const userAgent = request.headers['user-agent'] || 'unknown';
+    const ip =
+      typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0].trim()
+        : Array.isArray(forwardedFor)
+          ? forwardedFor[0].trim()
+          : request.ip || request.socket.remoteAddress || 'unknown';
 
-    // Obtener datos de la entidad
+    const userAgent =
+      typeof request.headers['user-agent'] === 'string'
+        ? request.headers['user-agent']
+        : 'unknown';
+
     const entityName = controller.name.replace('Controller', '');
-    const action = method;
-    const entityId = request.params?.id
-      ? parseInt(request.params.id, 10)
-      : null;
 
-    // Guardar datos antiguos para PUT/PATCH/DELETE
-    const oldValues: Record<string, unknown> | null = null;
+    const entityId =
+      request.params.id !== undefined
+        ? Number.parseInt(
+            Array.isArray(request.params.id)
+              ? request.params.id[0]
+              : request.params.id,
+            10,
+          )
+        : undefined;
+
+    const oldValues: Record<string, unknown> | undefined = undefined;
+
     const isUpdateOrDelete = ['PUT', 'PATCH', 'DELETE'].includes(method);
-
-    // Para DELETE, no podemos obtener los datos antiguos después de la operación
-    // Así que los guardamos antes
-    if (method === 'DELETE' && entityId) {
-      try {
-        // Intentar obtener la entidad antes de eliminar
-        // Esto depende del servicio, pero aquí lo dejamos como placeholder
-        // idealmente deberías inyectar el servicio correspondiente
-        // o usar un enfoque más genérico
-      } catch (error) {
-        // Si no se puede obtener, continuar
-      }
-    }
 
     return next.handle().pipe(
       tap({
-        next: async (data: any) => {
-          // Para PUT/PATCH, obtener los nuevos valores
-          const newValues: Record<string, unknown> | null = null;
+        next: (): void => {
+          const newValues: Record<string, unknown> | undefined = undefined;
 
-          if (['PUT', 'PATCH'].includes(method) && entityId) {
-            // Intentar obtener la entidad después de la actualización
-            // Esto depende del servicio específico
-            // Lo dejamos como placeholder
-          }
-
-          // Si es DELETE o UPDATE, registrar el cambio
           if (isUpdateOrDelete || method === 'POST') {
-            await this.auditLogService.log({
-              accountId,
-              moduleName: entityName,
-              action: this.getActionName(method),
-              entityName: entityName,
-              entityId: entityId || undefined,
-              oldValues: oldValues || undefined,
-              newValues: newValues || undefined,
-              ip,
-              userAgent,
-              metadata: {
-                endpoint: request.url,
-                method: request.method,
-                statusCode: response.statusCode,
-              },
-            });
+            this.auditLogService
+              .log({
+                accountId,
+                moduleName: entityName,
+                action: this.getActionName(method),
+                entityName,
+                entityId,
+                oldValues,
+                newValues,
+                ip,
+                userAgent,
+                metadata: {
+                  endpoint: request.originalUrl,
+                  method,
+                  statusCode: response.statusCode,
+                },
+              })
+              .catch((error) => {
+                console.error('Failed to log audit data:', error);
+              });
           }
         },
-        error: async (error: any) => {
-          // Registrar errores también
-          await this.auditLogService.log({
+
+        error: (error: unknown): void => {
+          const newValues: Record<string, unknown> =
+            error instanceof Error
+              ? {
+                  error: error.message,
+                  stack: error.stack,
+                }
+              : {
+                  error: String(error),
+                };
+
+          this.auditLogService.log({
             accountId,
             moduleName: entityName,
             action: `${this.getActionName(method)}_ERROR`,
-            entityName: entityName,
-            entityId: entityId || undefined,
-            oldValues: oldValues || undefined,
-            newValues: {
-              error: error.message,
-              stack: error.stack,
-              statusCode: error.status || 500,
-            },
+            entityName,
+            entityId,
+            oldValues,
+            newValues,
             ip,
             userAgent,
             metadata: {
-              endpoint: request.url,
-              method: request.method,
+              endpoint: request.originalUrl,
+              method,
               error: true,
+              statusCode:
+                error instanceof Error &&
+                'status' in error &&
+                typeof (error as { status?: unknown }).status === 'number'
+                  ? (error as { status: number }).status
+                  : 500,
             },
           });
         },
@@ -130,6 +143,7 @@ export class AuditLogInterceptor implements NestInterceptor {
       PATCH: 'UPDATE',
       DELETE: 'DELETE',
     };
-    return actionMap[method] || method;
+
+    return actionMap[method] ?? method;
   }
 }
