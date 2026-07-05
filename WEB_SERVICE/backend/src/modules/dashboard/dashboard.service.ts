@@ -246,19 +246,6 @@ export class DashboardService {
    * Obtiene estadísticas por departamento
    */
   async getDepartmentStats(): Promise<DepartmentStats[]> {
-    // Primero obtener todos los empleados agrupados por departamento
-    const employeesByDept = await this.db
-      .select({
-        departmentId: employee.departmentId,
-        departmentName: sql<string>`COALESCE(department.name, 'Sin Departamento')`,
-        total: sql<number>`COUNT(*)`,
-        active: sql<number>`SUM(CASE WHEN ${employee.status} = 'ACTIVE' THEN 1 ELSE 0 END)`,
-      })
-      .from(employee)
-      .leftJoin(department, eq(employee.departmentId, department.id))
-      .groupBy(employee.departmentId);
-
-    // Asistencias de hoy
     const today = new Date();
     const startOfDay = new Date(
       today.getFullYear(),
@@ -271,54 +258,44 @@ export class DashboardService {
       today.getDate() + 1,
     );
 
-    const todayAttendance = await this.db
+    // ============================================================
+    // CONSULTA ÚNICA CON SUBQUERY PARA ASISTENCIAS
+    // ============================================================
+    const results = await this.db
       .select({
-        employeeId: attendance.employeeId,
-        checkType: attendance.checkType,
+        departmentName: sql<string>`COALESCE(${department.name}, 'Sin Departamento')`,
+        total: sql<number>`COUNT(${employee.id})`,
+        present: sql<number>`SUM(
+        CASE WHEN ${attendance.id} IS NOT NULL AND ${attendance.checkType} = 'ENTRY' 
+        THEN 1 ELSE 0 END
+      )`,
       })
-      .from(attendance)
-      .where(
+      .from(employee)
+      .leftJoin(department, eq(employee.departmentId, department.id))
+      .leftJoin(
+        attendance,
         and(
+          eq(attendance.employeeId, employee.id),
           between(attendance.createdAt, startOfDay, endOfDay),
           eq(attendance.checkType, 'ENTRY'),
         ),
-      );
+      )
+      .where(eq(employee.status, 'ACTIVE'))
+      .groupBy(employee.departmentId);
 
-    const presentEmployees = new Set(todayAttendance.map((a) => a.employeeId));
-
-    // Construir estadísticas
-    const stats: DepartmentStats[] = [];
-
-    for (const dept of employeesByDept) {
-      // Contar empleados presentes de este departamento
-      // Esto requeriría una consulta adicional, simplificamos
-      const deptEmployees = await this.db
-        .select({ id: employee.id })
-        .from(employee)
-        .where(
-          and(
-            dept.departmentId
-              ? eq(employee.departmentId, dept.departmentId)
-              : sql`${employee.departmentId} IS NULL`,
-            eq(employee.status, 'ACTIVE'),
-          ),
-        );
-
-      const deptPresent = deptEmployees.filter((e) =>
-        presentEmployees.has(e.id),
-      ).length;
-      const total = Number(dept.total || 0);
-
-      stats.push({
-        department: dept.departmentName || 'Sin Departamento',
-        total,
-        present: deptPresent,
-        absent: total - deptPresent,
-        rate: total > 0 ? (deptPresent / total) * 100 : 0,
-      });
-    }
-
-    return stats.sort((a, b) => b.rate - a.rate);
+    // ============================================================
+    // CONSTRUIR RESULTADO
+    // ============================================================
+    return results.map((row) => ({
+      department: row.departmentName || 'Sin Departamento',
+      total: Number(row.total || 0),
+      present: Number(row.present || 0),
+      absent: Number(row.total || 0) - Number(row.present || 0),
+      rate:
+        Number(row.total || 0) > 0
+          ? (Number(row.present || 0) / Number(row.total || 0)) * 100
+          : 0,
+    }));
   }
 
   /**
