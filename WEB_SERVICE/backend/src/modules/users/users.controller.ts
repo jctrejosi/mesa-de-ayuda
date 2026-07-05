@@ -17,6 +17,8 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserQueryDto } from './dto/user-query.dto';
+import { UserResponseDto } from './dto/user-response.dto';
+import { Serialize } from '../../common/interceptors/serialize.interceptor';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -24,6 +26,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
+@Serialize(UserResponseDto) // Aplica a todos los métodos del controlador
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
