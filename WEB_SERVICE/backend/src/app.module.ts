@@ -6,8 +6,11 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { SentryFilter } from './common/filters/sentry.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
+import { SentryModule } from './modules/sentry/sentry.module';
 import { initializeDatabase } from './database/drizzle';
 import { AuthModule } from './modules/auth/auth.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -16,7 +19,7 @@ import { ConfigModule as AppConfigModule } from './modules/config/config.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuditLogModule } from './modules/audit/audit-log.module';
-import { AuditLogService } from './modules/audit/audit-log.service';
+import { AuditLogService } from './modules/audit';
 
 @Module({
   imports: [
@@ -34,6 +37,7 @@ import { AuditLogService } from './modules/audit/audit-log.service';
         },
       ],
     }),
+    SentryModule,
     AuthModule,
     AttendanceModule,
     CompanyModule,
@@ -56,8 +60,16 @@ import { AuditLogService } from './modules/audit/audit-log.service';
       useClass: HttpExceptionFilter,
     },
     {
+      provide: APP_FILTER,
+      useClass: SentryFilter,
+    },
+    {
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: SentryInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

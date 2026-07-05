@@ -6,6 +6,7 @@ import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 import compression from 'compression';
 import helmet from 'helmet';
+import * as Sentry from '@sentry/node';
 import { httpLoggerMiddleware } from './utils/logger';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -14,7 +15,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // Middleware de Correlation ID (debe ir antes que cualquier otro middleware)
+  // Middleware de Correlation ID
   app.use(
     new CorrelationIdMiddleware().use.bind(new CorrelationIdMiddleware()),
   );
@@ -32,6 +33,10 @@ async function bootstrap() {
   app.use(helmet());
   app.use(compression());
   app.use(httpLoggerMiddleware());
+
+  // Middleware de Sentry
+  app.use(Sentry.Handlers.requestHandler());
+  app.use(Sentry.Handlers.tracingHandler());
 
   // CORS configurado desde .env
   const corsOptions = configService.get<{
@@ -59,6 +64,7 @@ async function bootstrap() {
       .addTag('company', 'Empresas y sucursales')
       .addTag('config', 'Configuración')
       .addTag('dashboard', 'Dashboard')
+      .addTag('audit-logs', 'Logs de auditoría')
       .build();
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
