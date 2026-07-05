@@ -10,17 +10,22 @@ import {
   Logger as WinstonLogger,
   LoggerOptions,
 } from 'winston';
+import { AsyncLocalStorage } from 'async_hooks';
 
 const { combine, timestamp, printf, colorize, json, errors } = format;
+
+// AsyncLocalStorage para mantener el correlationId en el contexto de la request
+export const storage = new AsyncLocalStorage<Map<string, string>>();
 
 // Tipos para el contexto del log
 interface LogContext {
   context?: string;
   stack?: string;
+  correlationId?: string;
   [key: string]: unknown;
 }
 
-// Formato para consola (colorizado y legible)
+// Formato para consola (colorizado y legible) con Correlation ID
 const consoleFormat = combine(
   colorize({ all: true }),
   timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -32,18 +37,23 @@ const consoleFormat = combine(
       timestamp: ts,
       context,
       stack,
+      correlationId,
     } = info as unknown as LogContext & {
       level: string;
       message: string;
       timestamp: string;
     };
-    const ctx = context ? `[${context}] ` : '';
-    const msg = `${ts} ${level}: ${ctx}${message}`;
+
+    const ctx = context ? `[${context}]` : '';
+    const cid = correlationId ? `[${correlationId}]` : '';
+    const parts = [ts, level, ctx, cid, message].filter(Boolean);
+    const msg = parts.join(' ');
+
     return stack ? `${msg}\n${stack}` : msg;
   }),
 );
 
-// Formato para archivos (JSON)
+// Formato para archivos (JSON) con Correlation ID
 const fileFormat = combine(
   timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   errors({ stack: true }),
@@ -79,6 +89,14 @@ interface ILogger {
   http(message: string, context?: string, ...meta: unknown[]): void;
   debug(message: string, context?: string, ...meta: unknown[]): void;
   child(context: string): ILogger;
+}
+
+/**
+ * Obtiene el correlationId del contexto actual
+ */
+function getCorrelationId(): string | undefined {
+  const store = storage.getStore();
+  return store?.get('correlationId');
 }
 
 /**
@@ -142,24 +160,33 @@ class LoggerService implements ILogger {
     return LoggerService.instance;
   }
 
+  private getCorrelationId(): string | undefined {
+    return getCorrelationId();
+  }
+
   public error(message: string, context?: string, ...meta: unknown[]): void {
-    this.logger.error(message, { context, ...meta });
+    const correlationId = this.getCorrelationId();
+    this.logger.error(message, { context, correlationId, ...meta });
   }
 
   public warn(message: string, context?: string, ...meta: unknown[]): void {
-    this.logger.warn(message, { context, ...meta });
+    const correlationId = this.getCorrelationId();
+    this.logger.warn(message, { context, correlationId, ...meta });
   }
 
   public info(message: string, context?: string, ...meta: unknown[]): void {
-    this.logger.info(message, { context, ...meta });
+    const correlationId = this.getCorrelationId();
+    this.logger.info(message, { context, correlationId, ...meta });
   }
 
   public http(message: string, context?: string, ...meta: unknown[]): void {
-    this.logger.http(message, { context, ...meta });
+    const correlationId = this.getCorrelationId();
+    this.logger.http(message, { context, correlationId, ...meta });
   }
 
   public debug(message: string, context?: string, ...meta: unknown[]): void {
-    this.logger.debug(message, { context, ...meta });
+    const correlationId = this.getCorrelationId();
+    this.logger.debug(message, { context, correlationId, ...meta });
   }
 
   /**
@@ -168,32 +195,27 @@ class LoggerService implements ILogger {
   public child(context: string): ILogger {
     const child = this.logger.child({ context });
     return {
-      error: (message: string, ...meta: unknown[]) =>
-        child.error(message, ...meta),
-      warn: (message: string, ...meta: unknown[]) =>
-        child.warn(message, ...meta),
-      info: (message: string, ...meta: unknown[]) =>
-        child.info(message, ...meta),
-      http: (message: string, ...meta: unknown[]) =>
-        child.http(message, ...meta),
-      debug: (message: string, ...meta: unknown[]) =>
-        child.debug(message, ...meta),
-      child: (newContext: string) => {
-        const nestedChild = child.child({ context: newContext });
-        return {
-          error: (message: string, ...meta: unknown[]) =>
-            nestedChild.error(message, ...meta),
-          warn: (message: string, ...meta: unknown[]) =>
-            nestedChild.warn(message, ...meta),
-          info: (message: string, ...meta: unknown[]) =>
-            nestedChild.info(message, ...meta),
-          http: (message: string, ...meta: unknown[]) =>
-            nestedChild.http(message, ...meta),
-          debug: (message: string, ...meta: unknown[]) =>
-            nestedChild.debug(message, ...meta),
-          child: (nestedContext: string) => this.child(nestedContext),
-        };
+      error: (message: string, ...meta: unknown[]) => {
+        const correlationId = this.getCorrelationId();
+        child.error(message, { correlationId, ...meta });
       },
+      warn: (message: string, ...meta: unknown[]) => {
+        const correlationId = this.getCorrelationId();
+        child.warn(message, { correlationId, ...meta });
+      },
+      info: (message: string, ...meta: unknown[]) => {
+        const correlationId = this.getCorrelationId();
+        child.info(message, { correlationId, ...meta });
+      },
+      http: (message: string, ...meta: unknown[]) => {
+        const correlationId = this.getCorrelationId();
+        child.http(message, { correlationId, ...meta });
+      },
+      debug: (message: string, ...meta: unknown[]) => {
+        const correlationId = this.getCorrelationId();
+        child.debug(message, { correlationId, ...meta });
+      },
+      child: (newContext: string) => this.child(newContext),
     };
   }
 }
@@ -211,17 +233,19 @@ interface Request {
   method: string;
   originalUrl: string;
   ip?: string;
+  correlationId?: string;
 }
 
 interface Response {
   statusCode: number;
   on: (event: string, callback: () => void) => void;
+  setHeader: (name: string, value: string) => void;
 }
 
 type NextFunction = () => void;
 
 /**
- * Middleware para logging de requests HTTP
+ * Middleware para logging de requests HTTP con Correlation ID
  */
 export function httpLoggerMiddleware() {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -229,17 +253,17 @@ export function httpLoggerMiddleware() {
 
     res.on('finish', () => {
       const duration = Date.now() - start;
-      const { method, originalUrl } = req;
+      const { method, originalUrl, correlationId } = req;
       const { statusCode } = res;
 
       const message = `${method} ${originalUrl} ${statusCode} - ${duration}ms`;
 
       if (statusCode >= 500) {
-        logger.error(message, 'HTTP');
+        logger.error(message, 'HTTP', { correlationId });
       } else if (statusCode >= 400) {
-        logger.warn(message, 'HTTP');
+        logger.warn(message, 'HTTP', { correlationId });
       } else {
-        logger.http(message, 'HTTP');
+        logger.http(message, 'HTTP', { correlationId });
       }
     });
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
@@ -6,11 +7,17 @@ import * as express from 'express';
 import compression from 'compression';
 import helmet from 'helmet';
 import { httpLoggerMiddleware } from './utils/logger';
+import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+
+  // Middleware de Correlation ID (debe ir antes que cualquier otro middleware)
+  app.use(
+    new CorrelationIdMiddleware().use.bind(new CorrelationIdMiddleware()),
+  );
 
   app.use(express.json({ limit: '10mb' }));
   app.useGlobalPipes(
