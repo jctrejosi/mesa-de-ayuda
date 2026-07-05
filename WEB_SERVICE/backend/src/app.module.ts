@@ -7,6 +7,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { initializeDatabase } from './database/drizzle';
 import { AuthModule } from './modules/auth/auth.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -14,6 +15,8 @@ import { CompanyModule } from './modules/company/company.module';
 import { ConfigModule as AppConfigModule } from './modules/config/config.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { UsersModule } from './modules/users/users.module';
+import { AuditLogModule } from './modules/audit/audit-log.module';
+import { AuditLogService } from './modules/audit/audit-log.service';
 
 @Module({
   imports: [
@@ -21,7 +24,6 @@ import { UsersModule } from './modules/users/users.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -38,6 +40,7 @@ import { UsersModule } from './modules/users/users.module';
     AppConfigModule,
     DashboardModule,
     UsersModule,
+    AuditLogModule,
   ],
   providers: [
     {
@@ -56,10 +59,17 @@ import { UsersModule } from './modules/users/users.module';
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
   ],
 })
 export class AppModule implements OnModuleInit {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   onModuleInit() {
     initializeDatabase(this.configService);
