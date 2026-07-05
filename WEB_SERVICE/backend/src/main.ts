@@ -1,26 +1,67 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
+import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
-import { CorsOptions } from 'cors';
+import compression from 'compression';
 import helmet from 'helmet';
+import { httpLoggerMiddleware } from './utils/logger';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.use(helmet());
-  app.use(express.json({ limit: '10mb' }));
-
   const configService = app.get(ConfigService);
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-redundant-type-constituents
-  const corsValue = configService.get<CorsOptions | undefined>('app.cors');
-  // runtime check to satisfy type-safety lint rule
-  if (corsValue && typeof corsValue === 'object') {
-    app.enableCors(corsValue);
-  } else {
-    app.enableCors();
+
+  app.use(express.json({ limit: '10mb' }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
+  // Seguridad
+  app.use(helmet());
+  app.use(compression());
+  app.use(httpLoggerMiddleware());
+
+  // CORS configurado desde .env
+  const corsOptions = configService.get<{
+    origin: string[];
+    credentials: boolean;
+  }>('app.cors');
+
+  app.enableCors(
+    corsOptions || {
+      origin: ['http://localhost:5173', 'http://localhost:5174'],
+      credentials: true,
+    },
+  );
+
+  // Swagger (solo en desarrollo)
+  if (configService.get('app.nodeEnv') !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('HelpDesk API')
+      .setDescription('API para el sistema de control de asistencia')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addTag('auth', 'Autenticación')
+      .addTag('attendance', 'Asistencia')
+      .addTag('users', 'Usuarios')
+      .addTag('company', 'Empresas y sucursales')
+      .addTag('config', 'Configuración')
+      .addTag('dashboard', 'Dashboard')
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
   }
-  await app.listen(process.env.PORT ?? 3000);
+
+  const port = configService.get<number>('app.port', 3000);
+  await app.listen(port);
+
+  console.log(`🚀 Server running on http://localhost:${port}`);
+  console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();

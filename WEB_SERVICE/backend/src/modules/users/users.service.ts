@@ -3,9 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
-  Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { getDb } from '../../database/drizzle';
 import {
@@ -28,6 +26,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserQueryDto } from './dto/user-query.dto';
 import { CompanyService } from '../company/company.service';
+import { createContextLogger } from '../../utils/logger';
 
 export interface UserWithRelations {
   account: Account;
@@ -51,11 +50,11 @@ type DrizzleCondition = ReturnType<typeof eq> | ReturnType<typeof and>;
 
 @Injectable()
 export class UsersService {
-  private readonly logger = new Logger(UsersService.name);
+  private readonly logger = createContextLogger('UsersService');
   private readonly bcryptSaltRounds = 10;
 
   constructor(
-    private readonly configService: ConfigService,
+    // Removed unused configService property
     private readonly companyService: CompanyService,
   ) {}
 
@@ -244,7 +243,11 @@ export class UsersService {
   }
 
   // ============================================================
-  // CREAR USUARIO
+  // CREAR USUARIO (CON TRANSACCIÓN)
+  // ============================================================
+
+  // ============================================================
+  // CREAR USUARIO (CON TRANSACCIÓN)
   // ============================================================
 
   async create(data: CreateUserDto): Promise<UserWithRelations> {
@@ -339,93 +342,122 @@ export class UsersService {
       }
     }
 
-    // Si hay departamento o cargo pero no sucursal, permitirlo (solo validamos consistencia)
-    // Si no hay sucursal pero hay departamento/cargo, no hay problema
+    // ============================================================
+    // TRANSACCIÓN: Crear persona, empleado y cuenta
+    // ============================================================
 
-    // 7. Crear la persona
-    const newPerson: NewPerson = {
-      documentType: data.documentType || null,
-      documentNumber: data.documentNumber || null,
-      firstName: data.firstName,
-      middleName: data.middleName || null,
-      lastName: data.lastName,
-      secondLastName: data.secondLastName || null,
-      birthDate: data.birthDate ? new Date(data.birthDate) : null,
-      gender: data.gender || null,
-      email: data.email || null,
-      personalEmail: data.personalEmail || null,
-      phone: data.phone || null,
-      mobile: data.mobile || null,
-      address: data.address || null,
-      city: data.city || null,
-      state: data.state || null,
-      country: data.country || null,
-      active: true,
-    };
+    let personId: number = 0;
+    let employeeId: number = 0;
+    let accountId: number = 0;
 
-    const personResult = await this.db.insert(person).values(newPerson);
-    const personId = Number(personResult[0]?.insertId || 0);
+    try {
+      await this.db.transaction(async (tx) => {
+        // 5. Crear la persona
+        const newPerson: NewPerson = {
+          documentType: data.documentType || null,
+          documentNumber: data.documentNumber || null,
+          firstName: data.firstName,
+          middleName: data.middleName || null,
+          lastName: data.lastName,
+          secondLastName: data.secondLastName || null,
+          birthDate: data.birthDate ? new Date(data.birthDate) : null,
+          gender: data.gender || null,
+          email: data.email || null,
+          personalEmail: data.personalEmail || null,
+          phone: data.phone || null,
+          mobile: data.mobile || null,
+          address: data.address || null,
+          city: data.city || null,
+          state: data.state || null,
+          country: data.country || null,
+          active: true,
+        };
 
-    if (!personId) {
-      throw new BadRequestException('Error al crear la persona');
+        const personResult = await tx.insert(person).values(newPerson);
+        personId = Number(personResult[0]?.insertId || 0);
+
+        if (!personId) {
+          throw new BadRequestException('Error al crear la persona');
+        }
+
+        // 6. Crear el empleado
+        const newEmployee: NewEmployee = {
+          personId,
+          employeeCode:
+            data.employeeCode || `EMP-${String(personId).padStart(6, '0')}`,
+          branchId: data.branchId || null,
+          departmentId: data.departmentId || null,
+          positionId: data.positionId || null,
+          hireDate: data.hireDate ? new Date(data.hireDate) : new Date(),
+          terminationDate: null,
+          status: data.status || 'ACTIVE',
+        };
+
+        const employeeResult = await tx.insert(employee).values(newEmployee);
+        employeeId = Number(employeeResult[0]?.insertId || 0);
+
+        if (!employeeId) {
+          throw new BadRequestException('Error al crear el empleado');
+        }
+
+        // 7. Crear la cuenta
+        const hashedPassword = await bcrypt.hash(
+          data.password,
+          this.bcryptSaltRounds,
+        );
+
+        const newAccount: NewAccount = {
+          employeeId,
+          username: data.username,
+          passwordHash: hashedPassword,
+          role: data.role || 'employee',
+          failedAttempts: 0,
+          lockedUntil: null,
+          lastLogin: null,
+          active: data.active !== undefined ? data.active : true,
+        };
+
+        const accountResult = await tx.insert(account).values(newAccount);
+        accountId = Number(accountResult[0]?.insertId || 0);
+
+        if (!accountId) {
+          throw new BadRequestException('Error al crear la cuenta');
+        }
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Error desconocido';
+      this.logger.error(
+        `Error en transacción de creación de usuario: ${message}`,
+      );
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        'Error al crear el usuario. Los datos han sido revertidos.',
+      );
     }
 
-    // 8. Crear el empleado
-    const newEmployee: NewEmployee = {
-      personId,
-      employeeCode:
-        data.employeeCode || `EMP-${String(personId).padStart(6, '0')}`,
-      branchId: data.branchId || null,
-      departmentId: data.departmentId || null,
-      positionId: data.positionId || null,
-      hireDate: data.hireDate ? new Date(data.hireDate) : new Date(),
-      terminationDate: null,
-      status: data.status || 'ACTIVE',
-    };
-
-    const employeeResult = await this.db.insert(employee).values(newEmployee);
-    const employeeId = Number(employeeResult[0]?.insertId || 0);
-
-    if (!employeeId) {
-      throw new BadRequestException('Error al crear el empleado');
-    }
-
-    // 9. Crear la cuenta
-    const hashedPassword = await bcrypt.hash(
-      data.password,
-      this.bcryptSaltRounds,
-    );
-
-    const newAccount: NewAccount = {
-      employeeId,
-      username: data.username,
-      passwordHash: hashedPassword,
-      role: data.role || 'employee',
-      failedAttempts: 0,
-      lockedUntil: null,
-      lastLogin: null,
-      active: data.active !== undefined ? data.active : true,
-    };
-
-    const accountResult = await this.db.insert(account).values(newAccount);
-    const accountId = Number(accountResult[0]?.insertId || 0);
-
+    // 8. Verificar que el usuario se creó correctamente
     if (!accountId) {
-      throw new BadRequestException('Error al crear la cuenta');
+      throw new BadRequestException('Error al crear el usuario');
     }
 
-    // 10. Obtener el usuario completo
+    // 9. Obtener el usuario completo
     const user = await this.findById(accountId);
     if (!user) {
       throw new BadRequestException('Error al recuperar el usuario creado');
     }
 
-    this.logger.log(`Usuario creado: ${data.username} (ID: ${accountId})`);
+    this.logger.info(`Usuario creado: ${data.username} (ID: ${accountId})`);
     return user;
   }
 
   // ============================================================
-  // ACTUALIZAR USUARIO
+  // ACTUALIZAR USUARIO (CON TRANSACCIÓN)
   // ============================================================
 
   async update(
@@ -437,8 +469,12 @@ export class UsersService {
       throw new NotFoundException(`Usuario con ID ${accountId} no encontrado`);
     }
 
-    // 1. Actualizar persona
+    // Construir los datos de actualización
     const personUpdate: Partial<NewPerson> = {};
+    const employeeUpdate: Partial<NewEmployee> = {};
+    const accountUpdate: Partial<NewAccount> = {};
+
+    // 1. Preparar actualización de persona
     if (data.documentType !== undefined)
       personUpdate.documentType = data.documentType;
     if (data.documentNumber !== undefined)
@@ -462,15 +498,7 @@ export class UsersService {
     if (data.state !== undefined) personUpdate.state = data.state;
     if (data.country !== undefined) personUpdate.country = data.country;
 
-    if (Object.keys(personUpdate).length > 0) {
-      await this.db
-        .update(person)
-        .set(personUpdate)
-        .where(eq(person.id, existing.person.id));
-    }
-
-    // 2. Actualizar empleado
-    const employeeUpdate: Partial<NewEmployee> = {};
+    // 2. Preparar actualización de empleado
     if (data.employeeCode !== undefined)
       employeeUpdate.employeeCode = data.employeeCode;
     if (data.branchId !== undefined) {
@@ -520,15 +548,7 @@ export class UsersService {
         : null;
     if (data.status !== undefined) employeeUpdate.status = data.status;
 
-    if (Object.keys(employeeUpdate).length > 0) {
-      await this.db
-        .update(employee)
-        .set(employeeUpdate)
-        .where(eq(employee.id, existing.employee.id));
-    }
-
-    // 3. Actualizar cuenta
-    const accountUpdate: Partial<NewAccount> = {};
+    // 3. Preparar actualización de cuenta
     if (data.username !== undefined) {
       if (data.username !== existing.account.username) {
         const existingUsername = await this.db
@@ -559,14 +579,52 @@ export class UsersService {
     }
     if (data.active !== undefined) accountUpdate.active = data.active;
 
-    if (Object.keys(accountUpdate).length > 0) {
-      await this.db
-        .update(account)
-        .set(accountUpdate)
-        .where(eq(account.id, accountId));
+    // 4. Ejecutar actualizaciones en transacción
+    const hasPersonUpdate = Object.keys(personUpdate).length > 0;
+    const hasEmployeeUpdate = Object.keys(employeeUpdate).length > 0;
+    const hasAccountUpdate = Object.keys(accountUpdate).length > 0;
+
+    if (hasPersonUpdate || hasEmployeeUpdate || hasAccountUpdate) {
+      try {
+        await this.db.transaction(async (tx) => {
+          if (hasPersonUpdate) {
+            await tx
+              .update(person)
+              .set(personUpdate)
+              .where(eq(person.id, existing.person.id));
+          }
+
+          if (hasEmployeeUpdate) {
+            await tx
+              .update(employee)
+              .set(employeeUpdate)
+              .where(eq(employee.id, existing.employee.id));
+          }
+
+          if (hasAccountUpdate) {
+            await tx
+              .update(account)
+              .set(accountUpdate)
+              .where(eq(account.id, accountId));
+          }
+        });
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : 'Error desconocido';
+        this.logger.error(
+          `Error en transacción de actualización de usuario: ${message}`,
+        );
+        if (
+          error instanceof BadRequestException ||
+          error instanceof ConflictException
+        ) {
+          throw error;
+        }
+        throw new BadRequestException('Error al actualizar el usuario');
+      }
     }
 
-    // 4. Obtener el usuario actualizado
+    // 5. Obtener el usuario actualizado
     const updated = await this.findById(accountId);
     if (!updated) {
       throw new BadRequestException(
@@ -574,14 +632,14 @@ export class UsersService {
       );
     }
 
-    this.logger.log(
+    this.logger.info(
       `Usuario actualizado: ${updated.account.username} (ID: ${accountId})`,
     );
     return updated;
   }
 
   // ============================================================
-  // ELIMINAR USUARIO
+  // ELIMINAR USUARIO (SOFT DELETE)
   // ============================================================
 
   async delete(accountId: number): Promise<boolean> {
@@ -596,14 +654,14 @@ export class UsersService {
       .set({ active: false })
       .where(eq(account.id, accountId));
 
-    this.logger.log(
+    this.logger.info(
       `Usuario desactivado: ${existing.account.username} (ID: ${accountId})`,
     );
     return true;
   }
 
   // ============================================================
-  // ELIMINAR USUARIO FÍSICAMENTE (solo para uso interno)
+  // ELIMINAR USUARIO FÍSICAMENTE (CON TRANSACCIÓN)
   // ============================================================
 
   async deletePermanently(accountId: number): Promise<boolean> {
@@ -612,12 +670,21 @@ export class UsersService {
       throw new NotFoundException(`Usuario con ID ${accountId} no encontrado`);
     }
 
-    // Eliminar en orden: account, employee, person
-    await this.db.delete(account).where(eq(account.id, accountId));
-    await this.db.delete(employee).where(eq(employee.id, existing.employee.id));
-    await this.db.delete(person).where(eq(person.id, existing.person.id));
+    try {
+      await this.db.transaction(async (tx) => {
+        // Eliminar en orden: account, employee, person
+        await tx.delete(account).where(eq(account.id, accountId));
+        await tx.delete(employee).where(eq(employee.id, existing.employee.id));
+        await tx.delete(person).where(eq(person.id, existing.person.id));
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Error desconocido';
+      this.logger.error(`Error eliminando usuario permanentemente: ${message}`);
+      throw new BadRequestException('Error al eliminar el usuario');
+    }
 
-    this.logger.log(
+    this.logger.info(
       `Usuario eliminado permanentemente: ${existing.account.username} (ID: ${accountId})`,
     );
     return true;
@@ -639,7 +706,7 @@ export class UsersService {
       .set({ active: newStatus })
       .where(eq(account.id, accountId));
 
-    this.logger.log(
+    this.logger.info(
       `Usuario ${newStatus ? 'activado' : 'desactivado'}: ${existing.account.username}`,
     );
     return { active: newStatus };
@@ -678,7 +745,7 @@ export class UsersService {
       .set({ passwordHash: hashedPassword })
       .where(eq(account.id, accountId));
 
-    this.logger.log(
+    this.logger.info(
       `Contraseña actualizada para usuario: ${existing.account.username}`,
     );
     return true;
