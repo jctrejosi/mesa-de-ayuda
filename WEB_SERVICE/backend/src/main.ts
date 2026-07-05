@@ -6,7 +6,6 @@ import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 import compression from 'compression';
 import helmet from 'helmet';
-import * as Sentry from '@sentry/node';
 import { httpLoggerMiddleware } from './utils/logger';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -33,10 +32,6 @@ async function bootstrap() {
   app.use(helmet());
   app.use(compression());
   app.use(httpLoggerMiddleware());
-
-  // Middleware de Sentry
-  app.use(Sentry.Handlers.requestHandler());
-  app.use(Sentry.Handlers.tracingHandler());
 
   // CORS configurado desde .env
   const corsOptions = configService.get<{

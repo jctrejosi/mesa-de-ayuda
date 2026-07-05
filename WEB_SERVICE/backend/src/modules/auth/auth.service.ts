@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { compare } from 'bcryptjs';
 import { getDb } from '../../database/drizzle';
 import { account, employee, person, refreshToken } from '../../database/schema';
 import { eq, and } from 'drizzle-orm';
@@ -15,6 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { MicrosoftLoginDto } from './dto/microsoft-login.dto';
 import type { NewRefreshToken } from '../../database/schema/refresh-token.schema';
+import { compare } from 'bcryptjs';
 
 export interface JwtPayload {
   sub: number; // account.id
@@ -122,9 +122,7 @@ export class AuthService {
       return null;
     }
 
-    const isPasswordValid = await (
-      compare as (data: string, encrypted: string) => Promise<boolean>
-    )(password, passwordHash);
+    const isPasswordValid = await compare(password, passwordHash);
 
     if (!isPasswordValid) {
       this.logger.warn(

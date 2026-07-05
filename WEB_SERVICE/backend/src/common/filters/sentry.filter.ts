@@ -33,7 +33,6 @@ export class SentryFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const request = ctx.getRequest<AuthenticatedRequest>();
-    const response = ctx.getResponse<Response>();
 
     // Enviar a Sentry
     Sentry.captureException(exception, {
@@ -49,18 +48,6 @@ export class SentryFilter implements ExceptionFilter {
         params: request.params,
         user: request.user,
       },
-    });
-
-    // Determinar el código de estado y mensaje
-    const status = this.getStatusCode(exception);
-    const message = this.getErrorMessage(exception);
-
-    // Enviar respuesta al cliente
-    response.status(status).json({
-      statusCode: status,
-      message,
-      timestamp: new Date().toISOString(),
-      path: request.url,
     });
   }
 

@@ -19,7 +19,6 @@ import { ConfigModule as AppConfigModule } from './modules/config/config.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuditLogModule } from './modules/audit/audit-log.module';
-import { AuditLogService } from './modules/audit';
 
 @Module({
   imports: [
@@ -78,10 +77,7 @@ import { AuditLogService } from './modules/audit';
   ],
 })
 export class AppModule implements OnModuleInit {
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly auditLogService: AuditLogService,
-  ) {}
+  constructor(private readonly configService: ConfigService) {}
 
   onModuleInit() {
     initializeDatabase(this.configService);
