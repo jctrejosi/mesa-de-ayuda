@@ -34,6 +34,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
+import logo from "../assets/logo.png";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StatusType = "approved" | "rejected" | "late";
@@ -424,8 +426,12 @@ const Sidebar = ({
         style={{ borderColor: "var(--sidebar-border)" }}
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-            <Building2 size={16} className="text-white" />
+          <div className="w-8 h-8 flex items-center justify-center">
+            <img
+              src={logo}
+              alt="DSI Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
             <p className="text-white font-semibold text-sm leading-tight">
