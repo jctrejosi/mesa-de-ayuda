@@ -1,0 +1,792 @@
+﻿============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\modules\auth\auth.controller.ts
+============================================================
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  UseGuards,
+  Request,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { MicrosoftLoginDto } from './dto/microsoft-login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../interfaces/request.interface';
+
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  /**
+   * Login con username y password
+   * POST /api/auth/login
+   */
+  @Public()
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  async login(@Body() loginDto: LoginDto) {
+    console.log('ðŸ“¥ Login request received:', {
+      email: loginDto.email,
+      passwordLength: loginDto.password?.length,
+      timestamp: new Date().toISOString(),
+    });
+    return this.authService.login(loginDto);
+  }
+
+  /**
+   * Login con Microsoft SSO
+   * POST /api/auth/microsoft
+   */
+  @Public()
+  @Post('microsoft')
+  @HttpCode(HttpStatus.OK)
+  microsoftLogin(@Body() microsoftDto: MicrosoftLoginDto) {
+    return this.authService.microsoftLogin(microsoftDto);
+  }
+
+  /**
+   * Refrescar token de acceso
+   * POST /api/auth/refresh
+   */
+  @Public()
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshToken(refreshTokenDto);
+  }
+
+  /**
+   * Obtener perfil del usuario autenticado
+   * GET /api/auth/me
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async getProfile(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.getProfile(user.sub);
+  }
+
+  /**
+   * Cerrar sesiÃ³n
+   * POST /api/auth/logout
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body?: { refreshToken?: string },
+  ) {
+    return this.authService.logout(user.sub, body?.refreshToken);
+  }
+}
+
+============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\modules\auth\auth.module.ts
+============================================================
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { LocalStrategy } from './strategies/local.strategy';
+
+@Module({
+  imports: [
+    PassportModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>(
+          'JWT_SECRET',
+          'default-secret',
+        );
+        const expiresIn = configService.get<string>('JWT_EXPIRES_IN', '7d');
+
+        return {
+          secret,
+          signOptions: {
+            expiresIn: expiresIn as
+              `${number}d` | `${number}h` | `${number}m` | `${number}s`,
+          },
+        };
+      },
+    }),
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, JwtStrategy, LocalStrategy],
+  exports: [AuthService, JwtModule],
+})
+export class AuthModule {}
+
+============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\modules\auth\auth.service.ts
+============================================================
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { getDb } from '../../database/drizzle';
+import { account, employee, person, refreshToken } from '../../database/schema';
+import { eq, and } from 'drizzle-orm';
+import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { MicrosoftLoginDto } from './dto/microsoft-login.dto';
+import type { NewRefreshToken } from '../../database/schema/refresh-token.schema';
+import { compare } from 'bcryptjs';
+
+export interface JwtPayload {
+  sub: number; // account.id
+  username: string;
+  employeeId: number;
+  role?: 'admin' | 'manager' | 'employee';
+}
+
+export interface TokenResponse {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn: number;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn: number;
+  user: {
+    id: number;
+    username: string;
+    employeeId: number;
+    fullName: string;
+    email?: string | null;
+    role?: 'admin' | 'manager' | 'employee';
+  };
+}
+
+type AccountUpdateData = {
+  failedAttempts: number;
+  lockedUntil?: Date | null;
+  lastLogin?: Date;
+};
+
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private readonly MAX_LOGIN_ATTEMPTS = 5;
+  private readonly LOCK_DURATION_MINUTES = 15;
+
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private get db() {
+    return getDb();
+  }
+
+  /**
+   * Autentica un usuario por username y password con bloqueo por intentos fallidos
+   */
+  async validateUser(
+    username: string,
+    password: string,
+  ): Promise<{
+    account: typeof account.$inferSelect;
+    employee: typeof employee.$inferSelect;
+    person: typeof person.$inferSelect;
+  } | null> {
+    const accounts = await this.db
+      .select()
+      .from(account)
+      .where(eq(account.username, username))
+      .limit(1);
+
+    if (!accounts.length) {
+      this.logger.warn(
+        `Intento de login fallido: usuario "${username}" no encontrado`,
+      );
+      return null;
+    }
+
+    const userAccount = accounts[0];
+
+    // Verificar si la cuenta estÃ¡ bloqueada
+    if (
+      userAccount.lockedUntil &&
+      new Date(userAccount.lockedUntil) > new Date()
+    ) {
+      const remainingMinutes = Math.ceil(
+        (new Date(userAccount.lockedUntil).getTime() - Date.now()) /
+          (60 * 1000),
+      );
+      this.logger.warn(
+        `Intento de login fallido: usuario "${username}" bloqueado por ${remainingMinutes} minutos`,
+      );
+      throw new UnauthorizedException(
+        `Cuenta bloqueada temporalmente. Intente nuevamente en ${remainingMinutes} minutos.`,
+      );
+    }
+
+    if (!userAccount.active) {
+      this.logger.warn(
+        `Intento de login fallido: usuario "${username}" inactivo`,
+      );
+      return null;
+    }
+
+    const passwordHash = userAccount.passwordHash;
+    if (!passwordHash) {
+      this.logger.warn(
+        `Intento de login fallido: usuario "${username}" sin hash de contraseÃ±a`,
+      );
+      return null;
+    }
+
+    const isPasswordValid = await compare(password, passwordHash);
+
+    if (!isPasswordValid) {
+      this.logger.warn(
+        `Intento de login fallido: contraseÃ±a incorrecta para "${username}"`,
+      );
+
+      // Incrementar intentos fallidos
+      const newAttempts = (userAccount.failedAttempts || 0) + 1;
+      const updateData: AccountUpdateData = { failedAttempts: newAttempts };
+
+      // Bloquear si supera el lÃ­mite
+      if (newAttempts >= this.MAX_LOGIN_ATTEMPTS) {
+        const lockedUntil = new Date(
+          Date.now() + this.LOCK_DURATION_MINUTES * 60 * 1000,
+        );
+        updateData.lockedUntil = lockedUntil;
+        this.logger.warn(
+          `Usuario "${username}" bloqueado por ${this.LOCK_DURATION_MINUTES} minutos (${newAttempts} intentos fallidos)`,
+        );
+        throw new UnauthorizedException(
+          `Demasiados intentos fallidos. Cuenta bloqueada por ${this.LOCK_DURATION_MINUTES} minutos.`,
+        );
+      }
+
+      await this.db
+        .update(account)
+        .set(updateData)
+        .where(eq(account.id, userAccount.id));
+
+      return null;
+    }
+
+    // Resetear intentos fallidos y actualizar Ãºltimo login
+    await this.db
+      .update(account)
+      .set({
+        failedAttempts: 0,
+        lockedUntil: null,
+        lastLogin: new Date(),
+      })
+      .where(eq(account.id, userAccount.id));
+
+    // Obtener datos del empleado y persona
+    const employees = await this.db
+      .select()
+      .from(employee)
+      .where(eq(employee.id, userAccount.employeeId))
+      .limit(1);
+
+    if (!employees.length) {
+      this.logger.error(
+        `Empleado no encontrado para account ID ${userAccount.id}`,
+      );
+      return null;
+    }
+
+    const persons = await this.db
+      .select()
+      .from(person)
+      .where(eq(person.id, employees[0].personId))
+      .limit(1);
+
+    if (!persons.length) {
+      this.logger.error(
+        `Persona no encontrada para employee ID ${employees[0].id}`,
+      );
+      return null;
+    }
+
+    return {
+      account: userAccount,
+      employee: employees[0],
+      person: persons[0],
+    };
+  }
+
+  /**
+   * Login con username y password
+   */
+  async login(loginDto: LoginDto): Promise<LoginResponse> {
+    const userData = await this.validateUser(
+      loginDto.username,
+      loginDto.password,
+    );
+
+    if (!userData) {
+      throw new UnauthorizedException('Credenciales invÃ¡lidas');
+    }
+
+    const fullName = [
+      userData.person.firstName,
+      userData.person.middleName,
+      userData.person.lastName,
+      userData.person.secondLastName,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const payload: JwtPayload = {
+      sub: userData.account.id,
+      username: userData.account.username,
+      employeeId: userData.account.employeeId,
+      role: userData.account.role,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+    const refreshTokenString = this.generateRefreshToken(payload);
+
+    // Guardar refresh token en BD
+    const expiresAt = new Date(
+      Date.now() +
+        this.parseDurationToSeconds(
+          this.configService.get<string>('app.jwt.refreshExpiresIn') ?? '30d',
+        ) *
+          1000,
+    );
+
+    const newRefreshToken: NewRefreshToken = {
+      accountId: userData.account.id,
+      token: refreshTokenString,
+      expiresAt,
+      revoked: false,
+    };
+
+    await this.db.insert(refreshToken).values(newRefreshToken);
+
+    return {
+      accessToken,
+      refreshToken: refreshTokenString,
+      expiresIn: this.getJwtExpiration(),
+      user: {
+        id: userData.account.id,
+        username: userData.account.username,
+        employeeId: userData.account.employeeId,
+        fullName: fullName || 'Usuario',
+        email: userData.person.email,
+        role: userData.account.role,
+      },
+    };
+  }
+
+  /**
+   * Login con Microsoft SSO
+   */
+  microsoftLogin(_: MicrosoftLoginDto): LoginResponse {
+    void _;
+
+    // TODO: Implementar verificaciÃ³n con Microsoft Graph API
+    // 1. Validar el token de Microsoft
+    // 2. Extraer email y datos del usuario
+    // 3. Buscar o crear usuario en la base de datos
+
+    throw new BadRequestException(
+      'Microsoft SSO no estÃ¡ implementado aÃºn. Por favor usa login tradicional.',
+    );
+  }
+
+  /**
+   * Refresca el token de acceso con validaciÃ³n en BD
+   */
+  async refreshToken(refreshTokenDto: RefreshTokenDto): Promise<{
+    accessToken: string;
+    expiresIn: number;
+  }> {
+    try {
+      const jwtSecret = this.configService.get<string>('app.jwt.secret');
+
+      if (!jwtSecret) {
+        this.logger.error('JWT secret no configurado');
+        throw new UnauthorizedException('ConfiguraciÃ³n invÃ¡lida');
+      }
+
+      const tokenString = refreshTokenDto.refreshToken;
+
+      if (!tokenString) {
+        this.logger.warn('Refresh token no provisto');
+        throw new UnauthorizedException('Refresh token invÃ¡lido o expirado');
+      }
+
+      // 1. Verificar en BD que existe, no estÃ¡ revocado y no expirÃ³
+      const storedTokens = await this.db
+        .select()
+        .from(refreshToken)
+        .where(eq(refreshToken.token, tokenString))
+        .limit(1);
+
+      if (!storedTokens.length) {
+        this.logger.warn('Refresh token no encontrado en BD');
+        throw new UnauthorizedException('Refresh token invÃ¡lido');
+      }
+
+      const storedToken = storedTokens[0];
+
+      if (storedToken.revoked) {
+        this.logger.warn(
+          `Refresh token revocado para account ID ${storedToken.accountId}`,
+        );
+        throw new UnauthorizedException('Refresh token revocado');
+      }
+
+      if (new Date(storedToken.expiresAt) < new Date()) {
+        this.logger.warn(
+          `Refresh token expirado para account ID ${storedToken.accountId}`,
+        );
+        // Eliminar token expirado
+        await this.db
+          .delete(refreshToken)
+          .where(eq(refreshToken.id, storedToken.id));
+        throw new UnauthorizedException('Refresh token expirado');
+      }
+
+      // 2. Validar el payload del token
+      const payload = this.jwtService.verify<JwtPayload>(tokenString, {
+        secret: jwtSecret,
+      });
+
+      // 3. Verificar que el usuario existe y estÃ¡ activo
+      const accounts = await this.db
+        .select()
+        .from(account)
+        .where(eq(account.id, payload.sub))
+        .limit(1);
+
+      if (!accounts.length || !accounts[0].active) {
+        this.logger.warn(`Usuario ${payload.sub} no vÃ¡lido o inactivo`);
+        // Revocar todos los tokens del usuario
+        await this.db
+          .update(refreshToken)
+          .set({ revoked: true })
+          .where(eq(refreshToken.accountId, payload.sub));
+        throw new UnauthorizedException('Usuario no vÃ¡lido');
+      }
+
+      // 4. Generar nuevo access token
+      const newPayload: JwtPayload = {
+        sub: payload.sub,
+        username: payload.username,
+        employeeId: payload.employeeId,
+        role: accounts[0].role,
+      };
+
+      const accessToken = this.jwtService.sign(newPayload);
+
+      return {
+        accessToken,
+        expiresIn: this.getJwtExpiration(),
+      };
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : JSON.stringify(error);
+      this.logger.error(`Error al refrescar token: ${message}`);
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Refresh token invÃ¡lido o expirado');
+    }
+  }
+
+  /**
+   * Obtiene el perfil del usuario autenticado
+   */
+  async getProfile(accountId: number): Promise<{
+    account: typeof account.$inferSelect;
+    employee: typeof employee.$inferSelect;
+    person: typeof person.$inferSelect;
+  }> {
+    const accounts = await this.db
+      .select()
+      .from(account)
+      .where(eq(account.id, accountId))
+      .limit(1);
+
+    if (!accounts.length) {
+      throw new NotFoundException(`Usuario con ID ${accountId} no encontrado`);
+    }
+
+    const employees = await this.db
+      .select()
+      .from(employee)
+      .where(eq(employee.id, accounts[0].employeeId))
+      .limit(1);
+
+    if (!employees.length) {
+      throw new NotFoundException('Empleado no encontrado');
+    }
+
+    const persons = await this.db
+      .select()
+      .from(person)
+      .where(eq(person.id, employees[0].personId))
+      .limit(1);
+
+    if (!persons.length) {
+      throw new NotFoundException('Persona no encontrada');
+    }
+
+    return {
+      account: accounts[0],
+      employee: employees[0],
+      person: persons[0],
+    };
+  }
+
+  /**
+   * Cierra la sesiÃ³n (logout) y revoca el refresh token
+   */
+  async logout(
+    accountId: number,
+    refreshTokenString?: string,
+  ): Promise<{ success: boolean; message: string }> {
+    if (refreshTokenString) {
+      // Revocar solo el token especÃ­fico
+      const result = await this.db
+        .update(refreshToken)
+        .set({ revoked: true })
+        .where(
+          and(
+            eq(refreshToken.token, refreshTokenString),
+            eq(refreshToken.accountId, accountId),
+          ),
+        );
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (result[0]?.affectedRows === 0) {
+        this.logger.warn(
+          `Intento de logout con token invÃ¡lido para account ${accountId}`,
+        );
+      } else {
+        this.logger.log(`Refresh token revocado para account ID ${accountId}`);
+      }
+    } else {
+      // Revocar todos los tokens del usuario (logout en todos los dispositivos)
+      await this.db
+        .update(refreshToken)
+        .set({ revoked: true })
+        .where(eq(refreshToken.accountId, accountId));
+      this.logger.log(
+        `Todos los refresh tokens revocados para account ID ${accountId}`,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'SesiÃ³n cerrada exitosamente',
+    };
+  }
+
+  /**
+   * Genera un refresh token con expiraciÃ³n mÃ¡s larga
+   */
+  private generateRefreshToken(payload: JwtPayload): string {
+    const refreshExpiresIn =
+      this.configService.get<string>('app.jwt.refreshExpiresIn') ?? '30d';
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const options: any = {
+      expiresIn: refreshExpiresIn,
+    };
+
+    return this.jwtService.sign(payload, options);
+  }
+
+  /**
+   * Obtiene el tiempo de expiraciÃ³n del token en segundos
+   */
+  private getJwtExpiration(): number {
+    const expiresIn =
+      this.configService.get<string>('app.jwt.expiresIn') ?? '7d';
+    return this.parseDurationToSeconds(expiresIn);
+  }
+
+  /**
+   * Convierte una duraciÃ³n (ej: "7d", "1h") a segundos
+   */
+  private parseDurationToSeconds(duration: string): number {
+    const value = parseInt(duration, 10);
+    const unit = duration.replace(/[0-9]/g, '');
+
+    switch (unit) {
+      case 's':
+        return value;
+      case 'm':
+        return value * 60;
+      case 'h':
+        return value * 3600;
+      case 'd':
+        return value * 86400;
+      default:
+        return 604800; // 7 dÃ­as por defecto
+    }
+  }
+}
+
+============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\modules\auth\dto\login.dto.ts
+============================================================
+import { IsString, IsNotEmpty, MinLength, MaxLength } from 'class-validator';
+
+export class LoginDto {
+  @IsString({ message: 'El nombre de usuario debe ser un texto' })
+  @IsNotEmpty({ message: 'El nombre de usuario es obligatorio' })
+  @MinLength(3, {
+    message: 'El nombre de usuario debe tener al menos 3 caracteres',
+  })
+  @MaxLength(60, {
+    message: 'El nombre de usuario no puede exceder los 60 caracteres',
+  })
+  username!: string;
+
+  @IsString({ message: 'La contraseÃ±a debe ser un texto' })
+  @IsNotEmpty({ message: 'La contraseÃ±a es obligatoria' })
+  @MinLength(4, { message: 'La contraseÃ±a debe tener al menos 4 caracteres' })
+  password!: string;
+}
+
+============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\modules\auth\dto\microsoft-login.dto.ts
+============================================================
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+
+export class MicrosoftLoginDto {
+  @IsString({ message: 'El token de acceso debe ser un texto' })
+  @IsNotEmpty({ message: 'El token de acceso es obligatorio' })
+  accessToken: string | undefined;
+
+  @IsOptional()
+  @IsString({ message: 'El ID del usuario debe ser un texto' })
+  userId?: string;
+
+  @IsOptional()
+  @IsString({ message: 'El email debe ser un texto' })
+  email?: string;
+
+  @IsOptional()
+  @IsString({ message: 'El nombre debe ser un texto' })
+  name?: string;
+}
+
+============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\modules\auth\dto\refresh-token.dto.ts
+============================================================
+import { IsString, IsNotEmpty } from 'class-validator';
+
+export class RefreshTokenDto {
+  @IsString({ message: 'El refresh token debe ser un texto' })
+  @IsNotEmpty({ message: 'El refresh token es obligatorio' })
+  refreshToken: string | undefined;
+}
+
+============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\modules\auth\strategies\jwt.strategy.ts
+============================================================
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
+import { getDb } from '../../../database/drizzle';
+import { account } from '../../../database/schema';
+import { eq } from 'drizzle-orm';
+import { JwtPayload } from '../auth.service';
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor(private readonly configService: ConfigService) {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKey: configService.get<string>('app.jwt.secret') || 'secret-key',
+    });
+  }
+
+  async validate(payload: JwtPayload) {
+    // Verificar que el usuario existe y estÃ¡ activo
+    const db = getDb();
+    const accounts = await db
+      .select({
+        role: account.role,
+        active: account.active,
+      })
+      .from(account)
+      .where(eq(account.id, payload.sub))
+      .limit(1);
+
+    if (!accounts.length || !accounts[0].active) {
+      throw new UnauthorizedException('Usuario no vÃ¡lido o inactivo');
+    }
+
+    return {
+      sub: payload.sub,
+      username: payload.username,
+      employeeId: payload.employeeId,
+      role: accounts[0].role,
+    };
+  }
+}
+
+============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\modules\auth\strategies\local.strategy.ts
+============================================================
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import {
+  Strategy as PassportLocalStrategy,
+  StrategyOptions,
+} from 'passport-local';
+import { AuthService } from '../auth.service';
+
+const LocalPassportStrategy = PassportLocalStrategy as unknown as new (
+  options: StrategyOptions,
+  verify?: (...args: any[]) => any,
+) => any;
+
+@Injectable()
+export class LocalStrategy extends PassportStrategy(LocalPassportStrategy) {
+  constructor(private readonly authService: AuthService) {
+    super({
+      usernameField: 'username',
+      passwordField: 'password',
+    });
+  }
+
+  async validate(username: string, password: string): Promise<any> {
+    const user = await this.authService.validateUser(username, password);
+    if (!user) {
+      throw new UnauthorizedException('Credenciales invÃ¡lidas');
+    }
+    return user;
+  }
+}
+

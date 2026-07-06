@@ -3,6 +3,9 @@ import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -45,7 +48,9 @@ import { AuditLogModule } from './modules/audit/audit-log.module';
     UsersModule,
     AuditLogModule,
   ],
+  controllers: [AppController],
   providers: [
+    AppService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
@@ -80,7 +85,12 @@ export class AppModule implements OnModuleInit {
   constructor(private readonly configService: ConfigService) {}
 
   onModuleInit() {
-    initializeDatabase(this.configService);
-    console.log('✅ Database initialized successfully');
+    try {
+      initializeDatabase(this.configService);
+      console.log('✅ Database initialized successfully');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('❌ Error al inicializar la base de datos:', message);
+    }
   }
 }
