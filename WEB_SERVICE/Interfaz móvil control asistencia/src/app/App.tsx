@@ -73,7 +73,7 @@ interface LoginFormErrors {
   password?: string;
 }
 
-function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
+function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -111,7 +111,9 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
 
     try {
       await login({ username: email, password });
-      // El login exitoso redirigirá automáticamente gracias al contexto
+      // ❌ Elimina esta línea si existe
+      // onSuccess();
+      // ✅ La redirección se maneja en AppContent
     } catch (err) {
       // El error ya se maneja en el contexto
     }
@@ -987,8 +989,17 @@ function AttendanceScreen({ onLogout }: { onLogout: () => void }) {
 }
 
 const AppContent = () => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const [view, setView] = useState<AppView>("login");
+  const { isAuthenticated, isLoading, user, isAdmin, isEmployee, logout } =
+    useAuth();
+
+  console.log("🔍 AppContent State:", {
+    isAuthenticated,
+    isLoading,
+    user,
+    isAdmin,
+    isEmployee,
+    role: user?.role,
+  });
 
   // Mostrar pantalla de carga mientras se verifica la autenticación
   if (isLoading) {
@@ -1002,22 +1013,47 @@ const AppContent = () => {
     );
   }
 
+  if (!isAuthenticated) {
+    return (
+      <div
+        className="min-h-screen"
+        style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
+      >
+        <LoginScreen />
+      </div>
+    );
+  }
+
+  // Si es admin, mostrar pantalla de carga (ya redirigió desde el login)
+  // Pero por si acaso, también redirigimos aquí
+  if (isAdmin) {
+    // Redirigir si por alguna razón no se hizo en el login
+    console.log("🚀 Redirigiendo a administración desde AppContent...");
+    window.location.href = "http://localhost:5174";
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-[#F5F7FA]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 size={48} className="text-[#2563EB] animate-spin" />
+          <p className="text-[#64748B] font-medium">
+            Redirigiendo al panel de administración...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Empleado o manager → AttendanceScreen
   return (
     <div
       className="min-h-screen"
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
     >
-      {isAuthenticated ? (
-        <div className="min-h-screen bg-[#F5F7FA] flex items-start justify-center">
-          <AttendanceScreen onLogout={() => {}} />
-        </div>
-      ) : (
-        <LoginScreen onSuccess={() => setView("attendance")} />
-      )}
+      <div className="min-h-screen bg-[#F5F7FA] flex items-start justify-center">
+        <AttendanceScreen onLogout={() => logout()} />
+      </div>
     </div>
   );
 };
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT APP
 // ═══════════════════════════════════════════════════════════════════════════════

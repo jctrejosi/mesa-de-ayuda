@@ -8,12 +8,12 @@ import React, {
 import { authService, LoginCredentials, LoginResponse } from "../services/api";
 
 interface User {
-  id: string;
-  name: string;
-  email: string;
-  code: string;
-  role: string;
-  area: string;
+  id: number;
+  username: string;
+  employeeId: number;
+  fullName: string;
+  email?: string | null;
+  role?: "admin" | "manager" | "employee";
   avatar?: string;
 }
 
@@ -21,6 +21,8 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isAdmin: boolean; // 👈 Añadir helper
+  isEmployee: boolean; // 👈 Añadir helper
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
@@ -54,13 +56,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (token && storedUser) {
         try {
-          // Verificar que el token sea válido
           const profile = await authService.getProfile();
           setUser(profile);
           setIsLoading(false);
           return;
         } catch (err) {
-          // Si falla, limpiar la sesión
           localStorage.removeItem("access_token");
           localStorage.removeItem("user");
         }
@@ -79,11 +79,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const response = await authService.login(credentials);
 
-      // Guardar en localStorage
-      localStorage.setItem("access_token", response.access_token);
-      localStorage.setItem("user", JSON.stringify(response.user));
+      console.log("📥 Login response:", response);
 
-      setUser(response.user);
+      const userData = {
+        ...response.user,
+        role: response.user.role || "employee",
+      };
+
+      localStorage.setItem("access_token", response.access_token);
+      localStorage.setItem("user", JSON.stringify(userData));
+
+      setUser(userData);
+
+      // 👈 REDIRIGIR INMEDIATAMENTE DESPUÉS DEL LOGIN
+      if (userData.role === "admin") {
+        console.log("🚀 Admin detectado, redirigiendo a http://localhost:5174");
+        window.location.href = "http://localhost:5174";
+      }
+      // Si es employee, la redirección la maneja AppContent
     } catch (err: any) {
       const errorMessage =
         err.response?.data?.message ||
@@ -102,7 +115,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (err) {
       // Ignorar errores en logout
     } finally {
-      // Siempre limpiar el estado local
       localStorage.removeItem("access_token");
       localStorage.removeItem("user");
       setUser(null);
@@ -112,10 +124,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const clearError = () => setError(null);
 
+  // 👈 Helpers para verificar roles
+  const isAdmin = user?.role === "admin";
+  const isEmployee = user?.role === "employee";
+
   const value = {
     user,
     isLoading,
     isAuthenticated: !!user,
+    isAdmin,
+    isEmployee,
     login,
     logout,
     error,
