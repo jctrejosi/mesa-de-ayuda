@@ -14,6 +14,43 @@ export default defineConfig({
 });
 
 ============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\scripts\generate-password.ts
+============================================================
+import * as bcrypt from 'bcrypt';
+
+async function main() {
+  const password = 'Admin123!';
+  const hash = await bcrypt.hash(password, 10);
+
+  console.log(password);
+  console.log(hash);
+}
+
+main();
+
+============================================================
+Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\scripts\test-mysql.ts
+============================================================
+import mysql from 'mysql2/promise';
+
+async function main() {
+  const conn = await mysql.createConnection({
+    host: 'localhost',
+    port: 3306,
+    user: 'helpdesk',
+    password: 'helpdesk',
+    database: 'helpdesk',
+  });
+
+  const [rows] = await conn.query('SELECT 1');
+  console.log(rows);
+
+  await conn.end();
+}
+
+main().catch(console.error);
+
+============================================================
 Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\app.controller.spec.ts
 ============================================================
 import { Test, TestingModule } from '@nestjs/testing';
@@ -43,6 +80,7 @@ describe('AppController', () => {
 Archivo: :\My Projects\MESA DE AYUDA\WEB_SERVICE\backend\src\app.controller.ts
 ============================================================
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import { sql } from 'drizzle-orm';
 import { AppService } from './app.service';
 import { Public } from './common/decorators/public.decorator';
 import { getDb } from './database/drizzle';
@@ -69,18 +107,25 @@ export class AppController {
 
     try {
       const db = getDb();
-      await db.execute('SELECT 1 as connected');
+
+      await db.execute(sql`SELECT 1 AS connected`);
 
       healthCheck.database.status = 'ok';
       healthCheck.database.connected = true;
 
       return healthCheck;
     } catch (error) {
+      console.error('========== DATABASE ERROR ==========');
+      console.dir(error, { depth: null });
+      console.error('====================================');
+
       healthCheck.status = 'degraded';
       healthCheck.database.status = 'error';
       healthCheck.database.connected = false;
       healthCheck.database.error =
-        error instanceof Error ? error.message : 'Unknown error';
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error);
 
       return healthCheck;
     }
@@ -239,10 +284,11 @@ async function bootstrap() {
   );
 
   // Seguridad
-  app.use(helmet());
+  // app.use(helmet());
   app.use(compression());
   app.use(httpLoggerMiddleware());
 
+  /*
   // CORS configurado desde .env
   const corsOptions = configService.get<{
     origin: string[];
@@ -259,7 +305,14 @@ async function bootstrap() {
       ],
       credentials: true,
     },
-  );
+  ); */
+
+  app.enableCors({
+    origin: 'http://localhost:5173',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
 
   // Swagger (solo en desarrollo)
   if (configService.get('app.nodeEnv') !== 'production') {
