@@ -34,17 +34,6 @@ type AttendanceType = "entrada" | "salida";
 type GpsPrecision = "excellent" | "good" | "low";
 type NavTab = "asistencia" | "historial" | "perfil";
 
-// ─── Employee data ────────────────────────────────────────────────────────────
-
-const EMPLOYEE = {
-  name: "Ana Sofía Ramírez",
-  code: "EMP-2847",
-  role: "Agente de Mesa de Ayuda",
-  area: "Soporte Técnico — Piso 3",
-  avatar:
-    "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=120&h=120&fit=crop&auto=format&q=80",
-};
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(d: Date) {
@@ -524,7 +513,8 @@ function TopBar({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-function EmployeeCard() {
+function EmployeeCard({ employee }: { employee: any }) {
+  const EMPLOYEE = employee;
   return (
     <div className="mx-4 bg-white rounded-[20px] shadow-[0_2px_16px_rgba(15,23,42,0.08)] p-4 flex items-center gap-4">
       <div className="relative shrink-0">
@@ -774,10 +764,12 @@ function ConfirmationModal({
   type,
   time,
   onClose,
+  code,
 }: {
   type: AttendanceType;
   time: string;
   onClose: () => void;
+  code: string;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
@@ -836,7 +828,7 @@ function ConfirmationModal({
               {
                 icon: <Shield size={15} />,
                 label: "Empleado",
-                value: EMPLOYEE.code,
+                value: code,
               },
             ].map(({ icon, label, value, color }) => (
               <div key={label} className="flex items-center justify-between">
@@ -902,8 +894,26 @@ function AttendanceScreen({ onLogout }: { onLogout: () => void }) {
   const [attendanceType, setAttendanceType] =
     useState<AttendanceType>("entrada");
   const precision: GpsPrecision = "excellent";
+  const { user } = useAuth();
 
   const { logout } = useAuth();
+
+  const employeeData = {
+    name: user?.fullName || user?.username || "Usuario",
+    code: user?.employeeId
+      ? `EMP-${String(user.employeeId).padStart(4, "0")}`
+      : "EMP-0000",
+    role:
+      user?.role === "admin"
+        ? "Administrador"
+        : user?.role === "manager"
+          ? "Gerente"
+          : "Agente de Mesa de Ayuda",
+    area: user?.area || "", // Podrías obtener esto del backend también
+    avatar:
+      user?.photo ||
+      "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=120&h=120&fit=crop&auto=format&q=80",
+  };
 
   useEffect(() => {
     if (screen === "loading") {
@@ -942,7 +952,7 @@ function AttendanceScreen({ onLogout }: { onLogout: () => void }) {
         className="flex-1 overflow-y-auto overscroll-contain space-y-3 pb-4 pt-1"
         style={{ scrollbarWidth: "none" }}
       >
-        <EmployeeCard />
+        <EmployeeCard employee={employeeData} />
         <LocationCard screen={screen} precision={precision} />
         <ClockCard now={now} />
         <MainButton
@@ -979,6 +989,7 @@ function AttendanceScreen({ onLogout }: { onLogout: () => void }) {
       <BottomNav active={navTab} onSelect={setNavTab} />
       {showModal && (
         <ConfirmationModal
+          code={employeeData.code}
           type={attendanceType}
           time={confirmedTime}
           onClose={handleModalClose}

@@ -29,37 +29,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto) {
-    console.log('========================================');
-    console.log('📥 LOGIN REQUEST RECEIVED:');
-    console.log('  - Body completo:', JSON.stringify(loginDto, null, 2));
-    console.log('  - Username:', loginDto.username);
-    console.log('  - Password length:', loginDto.password?.length);
-    console.log('  - Timestamp:', new Date().toISOString());
-    console.log('========================================');
-
-    try {
-      const result = await this.authService.login(loginDto);
-      console.log('✅ Login exitoso:', {
-        userId: result.user?.id,
-        username: result.user?.username,
-        role: result.user?.role,
-      });
-      return result;
-    } catch (error: unknown) {
-      const hasResponse = (err: unknown): err is { response: unknown } =>
-        typeof err === 'object' && err !== null && 'response' in err;
-
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      const stack = error instanceof Error ? error.stack : undefined;
-      const response = hasResponse(error) ? error.response : undefined;
-
-      console.error('❌ Error en login:', {
-        message,
-        stack,
-        response,
-      });
-      throw error;
-    }
+    return this.authService.login(loginDto);
   }
 
   /**

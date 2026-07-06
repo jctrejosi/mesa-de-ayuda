@@ -5,7 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { authService, LoginCredentials, LoginResponse } from "../services/api";
+import { api } from "../services/api";
 
 interface User {
   id: number;
@@ -13,17 +13,34 @@ interface User {
   employeeId: number;
   fullName: string;
   email?: string | null;
-  role?: "admin" | "manager" | "employee";
-  avatar?: string;
+  role: "admin" | "manager" | "employee";
+  employeeCode: string;
+  area: string;
+  branch: {
+    id: number;
+    name: string;
+    address: string | null;
+    latitude: string | null;
+    longitude: string | null;
+  } | null;
+  department: {
+    id: number;
+    name: string;
+  } | null;
+  position: {
+    id: number;
+    name: string;
+  } | null;
+  photo?: string | null;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  isAdmin: boolean; // 👈 Añadir helper
-  isEmployee: boolean; // 👈 Añadir helper
-  login: (credentials: LoginCredentials) => Promise<void>;
+  isAdmin: boolean;
+  isEmployee: boolean;
+  login: (credentials: { username: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
   clearError: () => void;
@@ -48,7 +65,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Verificar sesión al cargar la aplicación
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem("access_token");
@@ -56,8 +72,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (token && storedUser) {
         try {
-          const profile = await authService.getProfile();
-          setUser(profile);
+          const response = await api.get("/auth/me");
+          const data = response.data.data || response.data;
+          setUser(data);
           setIsLoading(false);
           return;
         } catch (err) {
@@ -73,30 +90,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuth();
   }, []);
 
-  const login = async (credentials: LoginCredentials): Promise<void> => {
+  const login = async (credentials: {
+    username: string;
+    password: string;
+  }): Promise<void> => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await authService.login(credentials);
+      const response = await api.post("/auth/login", credentials);
+      const data = response.data.data || response.data;
 
-      console.log("📥 Login response:", response);
+      console.log("📥 Login response:", data);
 
-      const userData = {
-        ...response.user,
-        role: response.user.role || "employee",
+      const userData: User = {
+        id: data.user.id,
+        username: data.user.username,
+        employeeId: data.user.employeeId,
+        fullName: data.user.fullName,
+        email: data.user.email || null,
+        role: data.user.role || "employee",
+        employeeCode:
+          data.user.employeeCode ||
+          `EMP-${String(data.user.employeeId).padStart(4, "0")}`,
+        area: data.user.area || "Sin área asignada",
+        branch: data.user.branch || null,
+        department: data.user.department || null,
+        position: data.user.position || null,
+        photo: data.user.photo || null,
       };
 
-      localStorage.setItem("access_token", response.access_token);
+      localStorage.setItem("access_token", data.accessToken);
       localStorage.setItem("user", JSON.stringify(userData));
 
       setUser(userData);
 
-      // 👈 REDIRIGIR INMEDIATAMENTE DESPUÉS DEL LOGIN
       if (userData.role === "admin") {
         console.log("🚀 Admin detectado, redirigiendo a http://localhost:5174");
         window.location.href = "http://localhost:5174";
       }
-      // Si es employee, la redirección la maneja AppContent
     } catch (err: any) {
       const errorMessage =
         err.response?.data?.message ||
@@ -111,7 +142,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async (): Promise<void> => {
     setIsLoading(true);
     try {
-      await authService.logout();
+      await api.post("/auth/logout");
     } catch (err) {
       // Ignorar errores en logout
     } finally {
@@ -124,7 +155,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const clearError = () => setError(null);
 
-  // 👈 Helpers para verificar roles
   const isAdmin = user?.role === "admin";
   const isEmployee = user?.role === "employee";
 

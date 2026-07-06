@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   Injectable,
   UnauthorizedException,
@@ -8,7 +11,15 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { getDb } from '../../database/drizzle';
-import { account, employee, person, refreshToken } from '../../database/schema';
+import {
+  account,
+  employee,
+  person,
+  refreshToken,
+  branch,
+  department,
+  position,
+} from '../../database/schema';
 import { eq, and } from 'drizzle-orm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -40,6 +51,24 @@ export interface LoginResponse {
     fullName: string;
     email?: string | null;
     role?: 'admin' | 'manager' | 'employee';
+    employeeCode?: string | null;
+    area?: string | null;
+    branch?: {
+      id: number;
+      name: string;
+      address: string | null;
+      latitude: string | null;
+      longitude: string | null;
+    } | null;
+    department?: {
+      id: number;
+      name: string;
+    } | null;
+    position?: {
+      id: number;
+      name: string;
+    } | null;
+    photo?: string | null;
   };
 }
 
@@ -75,151 +104,128 @@ export class AuthService {
     employee: typeof employee.$inferSelect;
     person: typeof person.$inferSelect;
   } | null> {
-    try {
-      console.log('🔍 [1] Iniciando validación para:', username);
+    const accounts = await this.db
+      .select()
+      .from(account)
+      .where(eq(account.username, username))
+      .limit(1);
 
-      // 1. Buscar en la base de datos
-      console.log('🔍 [2] Buscando en DB...');
-      const accounts = await this.db
-        .select()
-        .from(account)
-        .where(eq(account.username, username))
-        .limit(1);
+    if (!accounts.length) {
+      this.logger.warn(
+        `Intento de login fallido: usuario "${username}" no encontrado`,
+      );
+      return null;
+    }
 
-      console.log(
-        `🔍 [3] Resultado: ${accounts.length} cuenta(s) encontrada(s)`,
+    const userAccount = accounts[0];
+
+    // Verificar si la cuenta está bloqueada
+    if (
+      userAccount.lockedUntil &&
+      new Date(userAccount.lockedUntil) > new Date()
+    ) {
+      const remainingMinutes = Math.ceil(
+        (new Date(userAccount.lockedUntil).getTime() - Date.now()) /
+          (60 * 1000),
+      );
+      this.logger.warn(
+        `Intento de login fallido: usuario "${username}" bloqueado por ${remainingMinutes} minutos`,
+      );
+      throw new UnauthorizedException(
+        `Cuenta bloqueada temporalmente. Intente nuevamente en ${remainingMinutes} minutos.`,
+      );
+    }
+
+    if (!userAccount.active) {
+      this.logger.warn(
+        `Intento de login fallido: usuario "${username}" inactivo`,
+      );
+      return null;
+    }
+
+    const passwordHash = userAccount.passwordHash;
+    if (!passwordHash) {
+      this.logger.warn(
+        `Intento de login fallido: usuario "${username}" sin hash de contraseña`,
+      );
+      return null;
+    }
+
+    const isPasswordValid = await compare(password, passwordHash);
+
+    if (!isPasswordValid) {
+      this.logger.warn(
+        `Intento de login fallido: contraseña incorrecta para "${username}"`,
       );
 
-      if (!accounts.length) {
-        console.log('❌ [4] Usuario no encontrado');
-        return null;
-      }
+      // Incrementar intentos fallidos
+      const newAttempts = (userAccount.failedAttempts || 0) + 1;
+      const updateData: AccountUpdateData = { failedAttempts: newAttempts };
 
-      const userAccount = accounts[0];
-      console.log('🔍 [5] Usuario encontrado:', {
-        id: userAccount.id,
-        username: userAccount.username,
-        active: userAccount.active,
-        role: userAccount.role,
-        lockedUntil: userAccount.lockedUntil,
-      });
-
-      // Verificar si la cuenta está bloqueada
-      if (
-        userAccount.lockedUntil &&
-        new Date(userAccount.lockedUntil) > new Date()
-      ) {
-        console.log('❌ [6] Cuenta bloqueada hasta:', userAccount.lockedUntil);
-        throw new UnauthorizedException('Cuenta bloqueada temporalmente.');
-      }
-
-      if (!userAccount.active) {
-        console.log('❌ [7] Cuenta inactiva');
-        return null;
-      }
-
-      const passwordHash = userAccount.passwordHash;
-      console.log('🔍 [8] Hash de contraseña:', {
-        exists: !!passwordHash,
-        length: passwordHash?.length,
-        startsWith: passwordHash?.substring(0, 7),
-      });
-
-      if (!passwordHash) {
-        console.log('❌ [9] Sin hash de contraseña');
-        return null;
-      }
-
-      console.log('🔐 [10] Verificando contraseña...');
-      const isPasswordValid = await compare(password, passwordHash);
-      console.log(`🔐 [11] ¿Contraseña válida? ${isPasswordValid}`);
-
-      if (!isPasswordValid) {
-        console.log('❌ [12] Contraseña incorrecta');
-
-        // Incrementar intentos fallidos
-        const newAttempts = (userAccount.failedAttempts || 0) + 1;
-        console.log(
-          `⚠️ [13] Intento fallido ${newAttempts}/${this.MAX_LOGIN_ATTEMPTS}`,
+      // Bloquear si supera el límite
+      if (newAttempts >= this.MAX_LOGIN_ATTEMPTS) {
+        const lockedUntil = new Date(
+          Date.now() + this.LOCK_DURATION_MINUTES * 60 * 1000,
         );
-
-        const updateData: AccountUpdateData = { failedAttempts: newAttempts };
-
-        if (newAttempts >= this.MAX_LOGIN_ATTEMPTS) {
-          const lockedUntil = new Date(
-            Date.now() + this.LOCK_DURATION_MINUTES * 60 * 1000,
-          );
-          updateData.lockedUntil = lockedUntil;
-          console.log(`🔒 [14] Cuenta bloqueada hasta:`, lockedUntil);
-          throw new UnauthorizedException(
-            `Demasiados intentos fallidos. Cuenta bloqueada por ${this.LOCK_DURATION_MINUTES} minutos.`,
-          );
-        }
-
-        console.log('🔄 [15] Actualizando intentos fallidos...');
-        await this.db
-          .update(account)
-          .set(updateData)
-          .where(eq(account.id, userAccount.id));
-
-        return null;
+        updateData.lockedUntil = lockedUntil;
+        this.logger.warn(
+          `Usuario "${username}" bloqueado por ${this.LOCK_DURATION_MINUTES} minutos (${newAttempts} intentos fallidos)`,
+        );
+        throw new UnauthorizedException(
+          `Demasiados intentos fallidos. Cuenta bloqueada por ${this.LOCK_DURATION_MINUTES} minutos.`,
+        );
       }
 
-      console.log('✅ [16] Credenciales válidas');
-
-      // Resetear intentos fallidos y actualizar último login
-      console.log('🔄 [17] Actualizando último login...');
       await this.db
         .update(account)
-        .set({
-          failedAttempts: 0,
-          lockedUntil: null,
-          lastLogin: new Date(),
-        })
+        .set(updateData)
         .where(eq(account.id, userAccount.id));
 
-      // Obtener datos del empleado y persona
-      console.log('🔍 [18] Obteniendo datos del empleado...');
-      const employees = await this.db
-        .select()
-        .from(employee)
-        .where(eq(employee.id, userAccount.employeeId))
-        .limit(1);
-
-      if (!employees.length) {
-        console.log('❌ [19] Empleado no encontrado');
-        return null;
-      }
-
-      console.log('🔍 [20] Obteniendo datos de la persona...');
-      const persons = await this.db
-        .select()
-        .from(person)
-        .where(eq(person.id, employees[0].personId))
-        .limit(1);
-
-      if (!persons.length) {
-        console.log('❌ [21] Persona no encontrada');
-        return null;
-      }
-
-      console.log('✅ [22] Validación completa');
-      console.log('📊 Datos:', {
-        accountId: userAccount.id,
-        employeeId: employees[0].id,
-        personId: persons[0].id,
-        fullName: `${persons[0].firstName} ${persons[0].lastName}`,
-      });
-
-      return {
-        account: userAccount,
-        employee: employees[0],
-        person: persons[0],
-      };
-    } catch (error) {
-      console.error('❌ [ERROR] Error en validateUser:', error);
-      throw error;
+      return null;
     }
+
+    // Resetear intentos fallidos y actualizar último login
+    await this.db
+      .update(account)
+      .set({
+        failedAttempts: 0,
+        lockedUntil: null,
+        lastLogin: new Date(),
+      })
+      .where(eq(account.id, userAccount.id));
+
+    // Obtener datos del empleado y persona
+    const employees = await this.db
+      .select()
+      .from(employee)
+      .where(eq(employee.id, userAccount.employeeId))
+      .limit(1);
+
+    if (!employees.length) {
+      this.logger.error(
+        `Empleado no encontrado para account ID ${userAccount.id}`,
+      );
+      return null;
+    }
+
+    const persons = await this.db
+      .select()
+      .from(person)
+      .where(eq(person.id, employees[0].personId))
+      .limit(1);
+
+    if (!persons.length) {
+      this.logger.error(
+        `Persona no encontrada para employee ID ${employees[0].id}`,
+      );
+      return null;
+    }
+
+    return {
+      account: userAccount,
+      employee: employees[0],
+      person: persons[0],
+    };
   }
 
   /**
@@ -243,6 +249,62 @@ export class AuthService {
     ]
       .filter(Boolean)
       .join(' ');
+
+    // Obtener datos de branch, department, position
+    let branchData: any = null;
+    let departmentData: any = null;
+    let positionData: any = null;
+
+    if (userData.employee.branchId) {
+      const branches = await this.db
+        .select({
+          id: branch.id,
+          name: branch.name,
+          address: branch.address,
+          latitude: branch.latitude,
+          longitude: branch.longitude,
+        })
+        .from(branch)
+        .where(eq(branch.id, userData.employee.branchId))
+        .limit(1);
+      if (branches.length) {
+        branchData = branches[0];
+      }
+    }
+
+    if (userData.employee.departmentId) {
+      const departments = await this.db
+        .select({
+          id: department.id,
+          name: department.name,
+        })
+        .from(department)
+        .where(eq(department.id, userData.employee.departmentId))
+        .limit(1);
+      if (departments.length) {
+        departmentData = departments[0];
+      }
+    }
+
+    if (userData.employee.positionId) {
+      const positions = await this.db
+        .select({
+          id: position.id,
+          name: position.name,
+        })
+        .from(position)
+        .where(eq(position.id, userData.employee.positionId))
+        .limit(1);
+      if (positions.length) {
+        positionData = positions[0];
+      }
+    }
+
+    // Construir el área
+    const areaParts: string[] = [];
+    if (departmentData?.name) areaParts.push(departmentData.name);
+    if (branchData?.name) areaParts.push(branchData.name);
+    const area = areaParts.length ? areaParts.join(' — ') : 'Sin área asignada';
 
     const payload: JwtPayload = {
       sub: userData.account.id,
@@ -283,6 +345,12 @@ export class AuthService {
         fullName: fullName || 'Usuario',
         email: userData.person.email,
         role: userData.account.role,
+        employeeCode: userData.employee.employeeCode,
+        area: area,
+        branch: branchData,
+        department: departmentData,
+        position: positionData,
+        photo: userData.person.photo,
       },
     };
   }
@@ -409,7 +477,122 @@ export class AuthService {
   }
 
   /**
-   * Obtiene el perfil del usuario autenticado
+   * Obtiene el perfil completo del usuario autenticado
+   */
+  async getProfileComplete(accountId: number): Promise<any> {
+    const accounts = await this.db
+      .select()
+      .from(account)
+      .where(eq(account.id, accountId))
+      .limit(1);
+
+    if (!accounts.length) {
+      throw new NotFoundException(`Usuario con ID ${accountId} no encontrado`);
+    }
+
+    const employees = await this.db
+      .select()
+      .from(employee)
+      .where(eq(employee.id, accounts[0].employeeId))
+      .limit(1);
+
+    if (!employees.length) {
+      throw new NotFoundException('Empleado no encontrado');
+    }
+
+    const persons = await this.db
+      .select()
+      .from(person)
+      .where(eq(person.id, employees[0].personId))
+      .limit(1);
+
+    if (!persons.length) {
+      throw new NotFoundException('Persona no encontrada');
+    }
+
+    // Obtener relaciones
+    let branchData: any = null;
+    let departmentData: any = null;
+    let positionData: any = null;
+
+    if (employees[0].branchId) {
+      const branches = await this.db
+        .select({
+          id: branch.id,
+          name: branch.name,
+          address: branch.address,
+          latitude: branch.latitude,
+          longitude: branch.longitude,
+        })
+        .from(branch)
+        .where(eq(branch.id, employees[0].branchId))
+        .limit(1);
+      if (branches.length) {
+        branchData = branches[0];
+      }
+    }
+
+    if (employees[0].departmentId) {
+      const departments = await this.db
+        .select({
+          id: department.id,
+          name: department.name,
+        })
+        .from(department)
+        .where(eq(department.id, employees[0].departmentId))
+        .limit(1);
+      if (departments.length) {
+        departmentData = departments[0];
+      }
+    }
+
+    if (employees[0].positionId) {
+      const positions = await this.db
+        .select({
+          id: position.id,
+          name: position.name,
+        })
+        .from(position)
+        .where(eq(position.id, employees[0].positionId))
+        .limit(1);
+      if (positions.length) {
+        positionData = positions[0];
+      }
+    }
+
+    const areaParts: string[] = [];
+    if (departmentData?.name) areaParts.push(departmentData.name);
+    if (branchData?.name) areaParts.push(branchData.name);
+    const area = areaParts.length ? areaParts.join(' — ') : 'Sin área asignada';
+
+    const fullName = [
+      persons[0].firstName,
+      persons[0].middleName,
+      persons[0].lastName,
+      persons[0].secondLastName,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return {
+      id: accounts[0].id,
+      username: accounts[0].username,
+      employeeId: accounts[0].employeeId,
+      fullName: fullName || 'Usuario',
+      email: persons[0].email,
+      role: accounts[0].role,
+      employeeCode: employees[0].employeeCode,
+      area: area,
+      branch: branchData,
+      department: departmentData,
+      position: positionData,
+      photo: persons[0].photo,
+      active: accounts[0].active,
+    };
+  }
+
+  /**
+   * Obtiene el perfil del usuario autenticado (versión legacy)
    */
   async getProfile(accountId: number): Promise<{
     account: typeof account.$inferSelect;
