@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import { httpLoggerMiddleware } from './utils/logger';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -32,6 +33,7 @@ async function bootstrap() {
   app.use(helmet());
   app.use(compression());
   app.use(httpLoggerMiddleware());
+  app.use(cookieParser());
 
   // CORS configurado desde .env
   const corsOptions = configService.get<{

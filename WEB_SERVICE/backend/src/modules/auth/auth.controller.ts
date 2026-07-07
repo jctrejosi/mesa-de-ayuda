@@ -4,9 +4,9 @@ import {
   Get,
   Body,
   UseGuards,
-  Request,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../interfaces/request.interface';
+import type { Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -28,8 +29,33 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.login(loginDto);
+
+    // 👇 Establecer cookie HTTP-only con el token
+    response.cookie('access_token', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+      path: '/',
+    });
+
+    // También el refresh token si quieres
+    if (result.refreshToken) {
+      response.cookie('refresh_token', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días
+        path: '/',
+      });
+    }
+
+    return result;
   }
 
   /**
@@ -74,7 +100,14 @@ export class AuthController {
   async logout(
     @CurrentUser() user: AuthenticatedUser,
     @Body() body?: { refreshToken?: string },
+    @Res({ passthrough: true }) response?: Response,
   ) {
+    // Limpiar cookies
+    if (response) {
+      response.clearCookie('access_token', { path: '/' });
+      response.clearCookie('refresh_token', { path: '/' });
+    }
+
     return this.authService.logout(user.sub, body?.refreshToken);
   }
 }

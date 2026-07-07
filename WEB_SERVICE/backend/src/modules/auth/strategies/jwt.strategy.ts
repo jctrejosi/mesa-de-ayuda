@@ -7,13 +7,23 @@ import { account } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { JwtPayload } from '../auth.service';
 
+interface RequestWithCookies extends Request {
+  cookies: {
+    access_token?: string;
+  };
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly configService: ConfigService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (req: RequestWithCookies): string | null => {
+          return req.cookies?.access_token ?? null;
+        },
+      ]),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET', 'default-secret'),
+      secretOrKey: process.env.JWT_SECRET || 'secret-key',
     });
   }
 
