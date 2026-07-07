@@ -523,151 +523,159 @@ const UserFilterBar = ({
 };
 
 // ─── User Table ───────────────────────────────────────────────────────────────
-
-const UserTable = ({
-  users,
-  onEdit,
-  onToggleActive,
-  currentAdminId,
-}: {
+interface UserTableProps {
   users: UserRecord[];
   onEdit: (u: UserRecord) => void;
   onToggleActive: (u: UserRecord) => void;
   currentAdminId: string;
-}) => {
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+}
+
+export const UserTable = ({
+  users,
+  onEdit,
+  onToggleActive,
+  currentAdminId,
+  onLoadMore,
+  hasMore = false,
+}: UserTableProps) => {
   if (users.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-border py-20 flex flex-col items-center gap-3">
-        <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center">
-          <Users size={24} className="text-slate-300" />
+      <div className="bg-white rounded-2xl border border-border h-full flex flex-col items-center justify-center gap-3">
+        <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center">
+          <Users size={26} className="text-slate-300" />
         </div>
-        <p className="text-sm font-medium text-slate-500">Sin usuarios</p>
+
+        <p className="text-sm font-semibold text-slate-600">Sin usuarios</p>
+
         <p className="text-xs text-slate-400 text-center max-w-xs">
           No se encontraron usuarios que coincidan con los filtros aplicados.
         </p>
       </div>
     );
   }
+
   return (
-    <div className="bg-white rounded-xl border border-border overflow-hidden shadow-sm">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b border-border bg-slate-50">
-            {[
-              "Usuario",
-              "Código",
-              "Rol",
-              "Estado",
-              "Sucursal",
-              "Último acceso",
-              "Acciones",
-            ].map((h) => (
-              <th
-                key={h}
-                className="px-4 py-3 text-left font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u, i) => {
-            const isSelf = u.id === currentAdminId;
-            return (
-              <tr
-                key={u.id}
-                className={`border-b border-border hover:bg-blue-50/30 transition-colors ${i % 2 === 1 ? "bg-slate-50/30" : ""}`}
-              >
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <Avatar user={u} size="sm" />
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${u.isActive ? "bg-green-500" : "bg-slate-300"}`}
-                      />
-                    </div>
-                    <div>
-                      <p className="font-medium text-slate-700 flex items-center gap-1">
-                        {u.fullName}
-                        {isSelf && (
-                          <span className="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-semibold">
-                            Tú
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        {u.email}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-[10px]">
-                    {u.employeeCode}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <RoleChip role={u.role} />
-                </td>
-                <td className="px-4 py-3">
-                  <UserStatusChip status={u.status} />
-                </td>
-                <td className="px-4 py-3 text-slate-500 text-xs">
-                  {u.branchName}
-                </td>
-                <td className="px-4 py-3 text-slate-400 text-[10px] font-mono whitespace-nowrap">
-                  {u.lastLogin}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => onEdit(u)}
-                      className="w-7 h-7 rounded-lg hover:bg-blue-50 flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors"
-                      title="Editar usuario"
-                    >
-                      <Edit3 size={13} />
-                    </button>
-                    <button
-                      onClick={() => !isSelf && onToggleActive(u)}
-                      disabled={isSelf}
-                      title={
-                        isSelf
-                          ? "No puedes desactivarte a ti mismo"
-                          : u.isActive
-                            ? "Desactivar usuario"
-                            : "Activar usuario"
-                      }
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${isSelf ? "opacity-30 cursor-not-allowed text-slate-300" : u.isActive ? "hover:bg-red-50 text-slate-400 hover:text-red-600" : "hover:bg-green-50 text-slate-400 hover:text-green-600"}`}
-                    >
-                      {u.isActive ? (
-                        <UserX size={13} />
-                      ) : (
-                        <UserCheck size={13} />
-                      )}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div className="px-4 py-3 border-t border-border flex items-center justify-between">
-        <p className="text-xs text-slate-400">
-          {users.length} usuarios encontrados
-        </p>
-        <div className="flex items-center gap-1">
-          {["1", "2"].map((p) => (
-            <button
-              key={p}
-              className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors ${p === "1" ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+    <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden h-full flex flex-col">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-border bg-slate-50 flex items-center justify-between">
+        <h3 className="font-semibold text-slate-700">Usuarios</h3>
+
+        <span className="text-xs text-slate-500">
+          {users.length} encontrados
+        </span>
       </div>
+
+      {/* Lista */}
+      <div className="flex-1 overflow-y-auto divide-y divide-border">
+        {users.map((u) => {
+          const isSelf = u.id === currentAdminId;
+
+          return (
+            <div
+              key={u.id}
+              onClick={() => onEdit(u)}
+              className="px-6 py-4 hover:bg-blue-50/40 transition-colors cursor-pointer group"
+            >
+              <div className="flex items-start gap-4 w-full">
+                {/* Avatar */}
+                <div className="relative shrink-0 mt-0.5">
+                  <Avatar user={u} size="md" />
+
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
+                      u.isActive ? "bg-green-500" : "bg-slate-300"
+                    }`}
+                  />
+                </div>
+
+                {/* Información */}
+                <div className="flex-1 overflow-hidden space-y-2">
+                  {/* Nombre + Chips */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <p className="font-semibold text-slate-800 group-hover:text-blue-600 transition-colors">
+                      {u.fullName}
+                    </p>
+
+                    {isSelf && (
+                      <span className="text-[10px] font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                        Tú
+                      </span>
+                    )}
+
+                    <RoleChip role={u.role} />
+                    <UserStatusChip status={u.status} />
+                  </div>
+
+                  {/* Datos secundarios */}
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
+                    <span className="font-mono bg-slate-100 px-2 py-0.5 rounded">
+                      {u.employeeCode}
+                    </span>
+
+                    <span className="truncate max-w-[260px]">{u.email}</span>
+
+                    <span>{u.branchName || "Sin sucursal"}</span>
+
+                    {u.lastLogin && <span>Último acceso: {u.lastLogin}</span>}
+                  </div>
+                </div>
+
+                {/* Acciones */}
+                <div className="flex items-center gap-2 shrink-0 opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(u);
+                    }}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-100 transition-colors"
+                    title="Editar usuario"
+                  >
+                    <Edit3 size={15} />
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isSelf) onToggleActive(u);
+                    }}
+                    disabled={isSelf}
+                    title={
+                      isSelf
+                        ? "No puedes desactivarte a ti mismo"
+                        : u.isActive
+                          ? "Desactivar usuario"
+                          : "Activar usuario"
+                    }
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                      isSelf
+                        ? "opacity-30 cursor-not-allowed text-slate-300"
+                        : u.isActive
+                          ? "text-slate-400 hover:text-red-600 hover:bg-red-100"
+                          : "text-slate-400 hover:text-green-600 hover:bg-green-100"
+                    }`}
+                  >
+                    {u.isActive ? <UserX size={15} /> : <UserCheck size={15} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Ver más */}
+      {hasMore && onLoadMore && (
+        <div className="px-6 py-4 border-t border-border bg-slate-50">
+          <button
+            onClick={onLoadMore}
+            className="w-full py-2.5 rounded-lg text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-100 transition-colors"
+          >
+            Ver más usuarios
+          </button>
+        </div>
+      )}
     </div>
   );
 };
