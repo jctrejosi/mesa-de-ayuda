@@ -124,6 +124,16 @@ export class AttendanceController {
     return this.attendanceService.getStats(user.employeeId);
   }
 
+  /**
+   * Obtener estadísticas comparativas de asistencia (hoy vs ayer)
+   * GET /api/attendance/stats/comparative
+   */
+  @Get('stats/comparative')
+  @Roles('admin', 'manager')
+  async getComparativeStats() {
+    return this.attendanceService.getAttendanceStats();
+  }
+
   // ============================================================
   // RUTAS PARA ADMINISTRADORES
   // ============================================================

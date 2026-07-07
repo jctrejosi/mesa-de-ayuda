@@ -3,6 +3,7 @@ import type {
   AttendanceRecord,
   AttendanceWithRelations,
   AttendanceListResponse,
+  ComparativeStats,
 } from "../types";
 
 export const attendanceService = {
@@ -72,5 +73,15 @@ export const attendanceService = {
       },
     );
     return response.data;
+  },
+
+  async getComparativeStats(): Promise<ComparativeStats> {
+    console.log("📊 [Attendance] Obteniendo estadísticas comparativas...");
+
+    const response = await api.get("/attendance/stats/comparative");
+    const data = response.data.data || response.data;
+
+    console.log("📊 [Attendance] Estadísticas:", data);
+    return data;
   },
 };

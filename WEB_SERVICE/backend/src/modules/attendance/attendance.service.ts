@@ -25,6 +25,7 @@ import {
 import { calculateDistance } from '../../utils/geolocation';
 import { createContextLogger } from '../../utils/logger';
 import { ValidateLocationDto } from './dto/validate-location.dto';
+import { AttendanceStatsDto } from './dto/attendance-stats.dto';
 
 type AttendanceCheckType = 'ENTRY' | 'EXIT' | 'BREAK_START' | 'BREAK_END';
 
@@ -446,6 +447,131 @@ export class AttendanceService {
       todayCount: todayRecords.length,
       weekCount: weekRecords.length,
       monthCount: monthRecords.length,
+    };
+  }
+
+  /**
+   * Obtiene estadísticas comparativas de asistencia (hoy vs ayer)
+   */
+  async getAttendanceStats(): Promise<AttendanceStatsDto> {
+    const today = new Date();
+
+    // Hoy
+    const todayStart = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    const todayEnd = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1,
+    );
+
+    // Ayer
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStart = new Date(
+      yesterday.getFullYear(),
+      yesterday.getMonth(),
+      yesterday.getDate(),
+    );
+    const yesterdayEnd = new Date(
+      yesterday.getFullYear(),
+      yesterday.getMonth(),
+      yesterday.getDate() + 1,
+    );
+
+    // 1. Obtener todos los empleados activos
+    const activeEmployees = await this.db
+      .select({ id: employee.id })
+      .from(employee)
+      .where(eq(employee.status, 'ACTIVE'));
+
+    const totalActive = activeEmployees.length;
+
+    // 2. Asistencias de hoy (ENTRY)
+    const todayEntries = await this.db
+      .select({
+        employeeId: attendance.employeeId,
+      })
+      .from(attendance)
+      .where(
+        and(
+          eq(attendance.checkType, 'ENTRY'),
+          between(attendance.createdAt, todayStart, todayEnd),
+        ),
+      )
+      .groupBy(attendance.employeeId);
+
+    // 3. Asistencias de ayer (ENTRY)
+    const yesterdayEntries = await this.db
+      .select({
+        employeeId: attendance.employeeId,
+      })
+      .from(attendance)
+      .where(
+        and(
+          eq(attendance.checkType, 'ENTRY'),
+          between(attendance.createdAt, yesterdayStart, yesterdayEnd),
+        ),
+      )
+      .groupBy(attendance.employeeId);
+
+    // 4. Tardanzas de hoy (ENTRY después de las 8:30 AM)
+    const lateThreshold = new Date(today);
+    lateThreshold.setHours(8, 30, 0, 0);
+
+    const todayLate = await this.db
+      .select({
+        employeeId: attendance.employeeId,
+      })
+      .from(attendance)
+      .where(
+        and(
+          eq(attendance.checkType, 'ENTRY'),
+          gte(attendance.createdAt, lateThreshold),
+          lte(attendance.createdAt, todayEnd),
+        ),
+      )
+      .groupBy(attendance.employeeId);
+
+    // 5. Tardanzas de ayer (ENTRY después de las 8:30 AM)
+    const yesterdayLateThreshold = new Date(yesterday);
+    yesterdayLateThreshold.setHours(8, 30, 0, 0);
+
+    const yesterdayLate = await this.db
+      .select({
+        employeeId: attendance.employeeId,
+      })
+      .from(attendance)
+      .where(
+        and(
+          eq(attendance.checkType, 'ENTRY'),
+          gte(attendance.createdAt, yesterdayLateThreshold),
+          lte(attendance.createdAt, yesterdayEnd),
+        ),
+      )
+      .groupBy(attendance.employeeId);
+
+    const presentToday = todayEntries.length;
+    const presentYesterday = yesterdayEntries.length;
+    const lateToday = todayLate.length;
+    const lateYesterday = yesterdayLate.length;
+
+    return {
+      present: {
+        today: presentToday,
+        yesterday: presentYesterday,
+      },
+      pending: {
+        today: Math.max(0, totalActive - presentToday),
+        yesterday: Math.max(0, totalActive - presentYesterday),
+      },
+      late: {
+        today: lateToday,
+        yesterday: lateYesterday,
+      },
     };
   }
 

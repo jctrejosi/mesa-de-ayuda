@@ -2,8 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import {
   ClipboardList,
   Search,
-  Bell,
-  ChevronDown,
   Users,
   Clock,
   AlertTriangle,
@@ -17,23 +15,24 @@ import {
   CheckCircle2,
   TrendingUp,
   TrendingDown,
-  ChevronRight,
-  Save,
-  Map,
   LogIn,
   LogOut,
   Eye,
-  SlidersHorizontal,
   Wifi,
   Navigation,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+
+import { useComparativeStats } from "../../hooks/useComparativeStats";
+import { useAttendanceRecords } from "../../hooks/useAttendanceRecords";
+import { AttendanceRecord } from "../../types";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StatusType = "approved" | "rejected" | "late";
 type RecordType = "entry" | "exit";
-type ViewType = "attendance" | "users";
 
 interface Employee {
   id: string;
@@ -43,18 +42,6 @@ interface Employee {
   avatar: string;
   initials: string;
   avatarColor: string;
-}
-
-interface AttendanceRecord {
-  id: string;
-  employee: Employee;
-  date: string;
-  time: string;
-  type: RecordType;
-  status: StatusType;
-  distance: number;
-  coordinates: { lat: number; lng: number };
-  gpsAccuracy: number;
 }
 
 interface Toast {
@@ -307,141 +294,6 @@ const EMPLOYEES: Employee[] = [
   },
 ];
 
-const RECORDS: AttendanceRecord[] = [
-  {
-    id: "r1",
-    employee: EMPLOYEES[0],
-    date: "01/07/2026",
-    time: "08:02",
-    type: "entry",
-    status: "approved",
-    distance: 12,
-    coordinates: { lat: -12.0464, lng: -77.0428 },
-    gpsAccuracy: 4,
-  },
-  {
-    id: "r2",
-    employee: EMPLOYEES[1],
-    date: "01/07/2026",
-    time: "09:18",
-    type: "entry",
-    status: "late",
-    distance: 45,
-    coordinates: { lat: -12.0471, lng: -77.0435 },
-    gpsAccuracy: 8,
-  },
-  {
-    id: "r3",
-    employee: EMPLOYEES[2],
-    date: "01/07/2026",
-    time: "08:01",
-    type: "entry",
-    status: "approved",
-    distance: 8,
-    coordinates: { lat: -12.0468, lng: -77.0431 },
-    gpsAccuracy: 3,
-  },
-  {
-    id: "r4",
-    employee: EMPLOYEES[3],
-    date: "01/07/2026",
-    time: "08:45",
-    type: "entry",
-    status: "rejected",
-    distance: 312,
-    coordinates: { lat: -12.0512, lng: -77.0489 },
-    gpsAccuracy: 15,
-  },
-  {
-    id: "r5",
-    employee: EMPLOYEES[4],
-    date: "01/07/2026",
-    time: "08:00",
-    type: "entry",
-    status: "approved",
-    distance: 5,
-    coordinates: { lat: -12.0463, lng: -77.0427 },
-    gpsAccuracy: 2,
-  },
-  {
-    id: "r6",
-    employee: EMPLOYEES[0],
-    date: "01/07/2026",
-    time: "17:05",
-    type: "exit",
-    status: "approved",
-    distance: 18,
-    coordinates: { lat: -12.0465, lng: -77.0429 },
-    gpsAccuracy: 5,
-  },
-  {
-    id: "r7",
-    employee: EMPLOYEES[5],
-    date: "01/07/2026",
-    time: "09:32",
-    type: "entry",
-    status: "late",
-    distance: 22,
-    coordinates: { lat: -12.0469, lng: -77.0432 },
-    gpsAccuracy: 6,
-  },
-  {
-    id: "r8",
-    employee: EMPLOYEES[6],
-    date: "01/07/2026",
-    time: "08:03",
-    type: "entry",
-    status: "approved",
-    distance: 9,
-    coordinates: { lat: -12.0465, lng: -77.043 },
-    gpsAccuracy: 3,
-  },
-  {
-    id: "r9",
-    employee: EMPLOYEES[7],
-    date: "01/07/2026",
-    time: "08:15",
-    type: "entry",
-    status: "rejected",
-    distance: 289,
-    coordinates: { lat: -12.0498, lng: -77.0471 },
-    gpsAccuracy: 18,
-  },
-  {
-    id: "r10",
-    employee: EMPLOYEES[1],
-    date: "30/06/2026",
-    time: "17:02",
-    type: "exit",
-    status: "approved",
-    distance: 14,
-    coordinates: { lat: -12.0467, lng: -77.0431 },
-    gpsAccuracy: 4,
-  },
-  {
-    id: "r11",
-    employee: EMPLOYEES[2],
-    date: "30/06/2026",
-    time: "09:05",
-    type: "entry",
-    status: "late",
-    distance: 31,
-    coordinates: { lat: -12.047, lng: -77.0433 },
-    gpsAccuracy: 7,
-  },
-  {
-    id: "r12",
-    employee: EMPLOYEES[3],
-    date: "30/06/2026",
-    time: "08:00",
-    type: "entry",
-    status: "approved",
-    distance: 7,
-    coordinates: { lat: -12.0464, lng: -77.0428 },
-    gpsAccuracy: 2,
-  },
-];
-
 // ─── Utility Components ───────────────────────────────────────────────────────
 
 const StatusChip = ({ status }: { status: StatusType }) => {
@@ -590,9 +442,7 @@ const DetailModal = ({
             <h2 className="text-sm font-semibold text-slate-800">
               Detalle de registro
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              ID: {record.id.toUpperCase()}
-            </p>
+            <p className="text-xs text-slate-400 mt-0.5">ID: {record.id}</p>
           </div>
           <button
             onClick={onClose}
@@ -1037,13 +887,24 @@ export const AttendanceView = () => {
     null,
   );
 
+  const { stats, loading, error, refresh } = useComparativeStats();
+  const {
+    records,
+    loading: recordsLoading,
+    error: recordsError,
+    total,
+    refresh: recordsRefresh,
+    loadMore,
+    setFilters: setApiFilters,
+  } = useAttendanceRecords({}, 20);
+
   const addToast = (message: string, type: "success" | "error") => {
     const id = Math.random().toString(36).slice(2);
     setToasts((t) => [...t, { id, type, message }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   };
 
-  const filteredRecords = RECORDS.filter((r) => {
+  const filteredRecords = records.filter((r) => {
     if (
       filters.search &&
       !r.employee.name.toLowerCase().includes(filters.search.toLowerCase())
@@ -1060,8 +921,8 @@ export const AttendanceView = () => {
       <div className="grid grid-cols-4 gap-4">
         <KPICard
           label="Empleados presentes"
-          value={187}
-          delta={12}
+          value={stats?.present.today || 0}
+          delta={stats?.present.yesterday || 0}
           deltaLabel="vs ayer"
           icon={<Users size={18} />}
           color="text-blue-600"
@@ -1069,8 +930,8 @@ export const AttendanceView = () => {
         />
         <KPICard
           label="Pendientes por registrar"
-          value={24}
-          delta={-8}
+          value={stats?.pending.today || 0}
+          delta={stats?.pending.yesterday || 0}
           deltaLabel="vs ayer"
           icon={<Clock size={18} />}
           color="text-amber-600"
@@ -1078,21 +939,12 @@ export const AttendanceView = () => {
         />
         <KPICard
           label="Llegadas tardías"
-          value={9}
-          delta={3}
+          value={stats?.late.today || 0}
+          delta={stats?.late.yesterday || 0}
           deltaLabel="vs ayer"
           icon={<AlertTriangle size={18} />}
           color="text-orange-500"
           bgColor="bg-orange-50"
-        />
-        <KPICard
-          label="Registros rechazados"
-          value={4}
-          delta={-2}
-          deltaLabel="vs ayer"
-          icon={<XCircle size={18} />}
-          color="text-red-600"
-          bgColor="bg-red-50"
         />
       </div>
 
