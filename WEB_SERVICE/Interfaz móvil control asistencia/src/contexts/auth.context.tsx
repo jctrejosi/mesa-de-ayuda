@@ -5,34 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { api } from "../services/login.service";
-
-interface User {
-  id: number;
-  username: string;
-  employeeId: number;
-  fullName: string;
-  email?: string | null;
-  role: "admin" | "manager" | "employee";
-  employeeCode: string;
-  area: string;
-  branch: {
-    id: number;
-    name: string;
-    address: string | null;
-    latitude: string | null;
-    longitude: string | null;
-  } | null;
-  department: {
-    id: number;
-    name: string;
-  } | null;
-  position: {
-    id: number;
-    name: string;
-  } | null;
-  photo?: string | null;
-}
+import { authService, User, LoginCredentials } from "../services/auth.service";
 
 interface AuthContextType {
   user: User | null;
@@ -40,7 +13,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isEmployee: boolean;
-  login: (credentials: { username: string; password: string }) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
   clearError: () => void;
@@ -65,6 +38,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ Verificar sesión al cargar
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem("access_token");
@@ -72,12 +46,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (token && storedUser) {
         try {
-          const response = await api.get("/auth/me");
-          const data = response.data.data || response.data;
-          setUser(data);
+          // ✅ Usar authService.getProfile() correctamente
+          const profile = await authService.getProfile();
+          setUser(profile);
           setIsLoading(false);
           return;
         } catch (err) {
+          console.error("❌ Error al obtener perfil:", err);
           localStorage.removeItem("access_token");
           localStorage.removeItem("user");
         }
@@ -90,40 +65,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuth();
   }, []);
 
-  const login = async (credentials: {
-    username: string;
-    password: string;
-  }): Promise<void> => {
+  // ✅ Login
+  const login = async (credentials: LoginCredentials): Promise<void> => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await api.post("/auth/login", credentials);
-      const data = response.data.data || response.data;
+      // ✅ Usar authService.login()
+      const response = await authService.login(credentials);
 
-      console.log("📥 Login response:", data);
+      console.log("📥 Login response:", response);
 
+      // El user ya viene en el formato correcto de authService
       const userData: User = {
-        id: data.user.id,
-        username: data.user.username,
-        employeeId: data.user.employeeId,
-        fullName: data.user.fullName,
-        email: data.user.email || null,
-        role: data.user.role || "employee",
+        id: response.user.id,
+        username: response.user.username,
+        employeeId: response.user.employeeId,
+        fullName: response.user.fullName,
+        email: response.user.email || null,
+        role: response.user.role || "employee",
         employeeCode:
-          data.user.employeeCode ||
-          `EMP-${String(data.user.employeeId).padStart(4, "0")}`,
-        area: data.user.area || "Sin área asignada",
-        branch: data.user.branch || null,
-        department: data.user.department || null,
-        position: data.user.position || null,
-        photo: data.user.photo || null,
+          response.user.employeeCode ||
+          `EMP-${String(response.user.employeeId).padStart(4, "0")}`,
+        area: response.user.area || "Sin área asignada",
+        branch: response.user.branch || null,
+        department: response.user.department || null,
+        position: response.user.position || null,
+        photo: response.user.photo || null,
       };
 
-      localStorage.setItem("access_token", data.accessToken);
+      localStorage.setItem("access_token", response.access_token);
       localStorage.setItem("user", JSON.stringify(userData));
+
+      console.log("✅ Token guardado:", localStorage.getItem("access_token"));
+      console.log(
+        "✅ Token length:",
+        localStorage.getItem("access_token")?.length,
+      );
 
       setUser(userData);
 
+      // Redirigir si es admin
       if (userData.role === "admin") {
         console.log("🚀 Admin detectado, redirigiendo a http://localhost:5174");
         window.location.href = "http://localhost:5174";
@@ -139,12 +120,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // ✅ Logout
   const logout = async (): Promise<void> => {
     setIsLoading(true);
     try {
-      await api.post("/auth/logout");
+      // ✅ Usar authService.logout()
+      await authService.logout();
     } catch (err) {
-      // Ignorar errores en logout
+      console.warn("⚠️ Error en logout:", err);
     } finally {
       localStorage.removeItem("access_token");
       localStorage.removeItem("user");

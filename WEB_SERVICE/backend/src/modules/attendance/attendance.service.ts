@@ -24,6 +24,7 @@ import {
 } from './interfaces/attendance.interface';
 import { calculateDistance } from '../../utils/geolocation';
 import { createContextLogger } from '../../utils/logger';
+import { ValidateLocationDto } from './dto/validate-location.dto';
 
 type AttendanceCheckType = 'ENTRY' | 'EXIT' | 'BREAK_START' | 'BREAK_END';
 
@@ -491,6 +492,69 @@ export class AttendanceService {
         existing.length > 0
           ? `Ya registraste ${this.getCheckTypeLabel(type).toLowerCase()} hoy`
           : `Puedes registrar ${this.getCheckTypeLabel(type).toLowerCase()}`,
+    };
+  }
+
+  /**
+   * Valida la ubicación del empleado (método público)
+   * Usa el método privado validateLocation que ya existe
+   */
+  async validateEmployeeLocation(
+    employeeId: number,
+    dto: ValidateLocationDto,
+  ): Promise<{
+    isValid: boolean;
+    message: string;
+    distance: number;
+    maxRadius: number;
+    branch: {
+      id: number;
+      name: string;
+      address: string | null;
+      latitude: string;
+      longitude: string;
+      allowedRadius: number;
+    } | null;
+  }> {
+    // 1. Validar empleado
+    const employeeData = await this.validateEmployee(employeeId);
+
+    if (!employeeData.branchId) {
+      throw new BadRequestException(
+        'El empleado no tiene una sucursal asignada',
+      );
+    }
+
+    // 2. Validar sucursal
+    const branchData = await this.validateBranch(employeeData.branchId);
+
+    // 3. Usar el método privado validateLocation (NO lo tocas, sigue siendo private)
+    const validation = this.validateLocation(
+      dto.latitude,
+      dto.longitude,
+      branchData.latitude,
+      branchData.longitude,
+      branchData.allowedRadius,
+    );
+
+    // 4. Formatear respuesta
+    return {
+      isValid: validation.isWithinRadius,
+      message:
+        validation.message ||
+        (validation.isWithinRadius
+          ? 'Ubicación válida'
+          : 'Fuera del área permitida'),
+      distance: Math.round(validation.distance || 0),
+      maxRadius: validation.maxRadius || branchData.allowedRadius || 50,
+      branch: {
+        id: branchData.id,
+        name: branchData.name,
+        address: branchData.address,
+        latitude: branchData.latitude!,
+        longitude: branchData.longitude!,
+        allowedRadius: branchData.allowedRadius || 50,
+      },
     };
   }
 

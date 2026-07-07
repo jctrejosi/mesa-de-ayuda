@@ -25,6 +25,7 @@ import {
   Star,
 } from "lucide-react";
 import { AuthProvider, useAuth } from "../contexts/auth.context";
+import { useAttendance } from "../hook/useAttendance";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -549,7 +550,7 @@ function EmployeeCard({ employee }: { employee: any }) {
   );
 }
 
-function GpsPrecisionBadge({ precision }: { precision: GpsPrecision }) {
+function GpsPrecisionBadge({ precision }: { precision: GpsPrecision | null }) {
   const map = {
     excellent: {
       label: "GPS Excelente",
@@ -559,13 +560,13 @@ function GpsPrecisionBadge({ precision }: { precision: GpsPrecision }) {
     good: { label: "GPS Bueno", color: "text-[#D97706]", bg: "bg-[#FFFBEB]" },
     low: { label: "GPS Bajo", color: "text-[#DC2626]", bg: "bg-[#FEF2F2]" },
   };
-  const p = map[precision];
+  const p = precision ? map[precision] : null;
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${p.bg} ${p.color}`}
+      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${p?.bg || "bg-[#F0FDF4]"} ${p?.color || "text-[#16A34A]"}`}
     >
       <Signal size={10} />
-      {p.label}
+      {p?.label}
     </span>
   );
 }
@@ -575,7 +576,7 @@ function LocationCard({
   precision,
 }: {
   screen: AppScreen;
-  precision: GpsPrecision;
+  precision: GpsPrecision | null;
 }) {
   const isLoading = screen === "loading";
   const isValid = screen === "valid" || screen === "confirmed";
@@ -885,7 +886,7 @@ function ScreenSelector({
   );
 }
 
-function AttendanceScreen({ onLogout }: { onLogout: () => void }) {
+function AttendanceScreen() {
   const [screen, setScreen] = useState<AppScreen>("loading");
   const [navTab, setNavTab] = useState<NavTab>("asistencia");
   const [now, setNow] = useState(new Date());
@@ -893,10 +894,19 @@ function AttendanceScreen({ onLogout }: { onLogout: () => void }) {
   const [confirmedTime, setConfirmedTime] = useState("");
   const [attendanceType, setAttendanceType] =
     useState<AttendanceType>("entrada");
-  const precision: GpsPrecision = "excellent";
   const { user } = useAuth();
 
   const { logout } = useAuth();
+
+  const {
+    status, // ← Solo de validateLocation
+    validation, // ← Respuesta de validateLocation
+    precision, // ← Precisión GPS
+    isLoading, // ← Mientras valida
+    isRegistering, // ← Mientras registra
+    registerAttendance,
+    retry,
+  } = useAttendance();
 
   const employeeData = {
     name: user?.fullName || user?.username || "Usuario",
@@ -1060,7 +1070,7 @@ const AppContent = () => {
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
     >
       <div className="min-h-screen bg-[#F5F7FA] flex items-start justify-center">
-        <AttendanceScreen onLogout={() => logout()} />
+        <AttendanceScreen />
       </div>
     </div>
   );

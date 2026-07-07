@@ -23,6 +23,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../interfaces/request.interface';
+import { ValidateLocationDto } from './dto/validate-location.dto';
 
 // Interfaz para la request con los campos que necesitamos
 type RequestWithIp = Omit<Request, 'connection'> & {
@@ -40,6 +41,22 @@ export class AttendanceController {
   // ============================================================
   // RUTAS PARA EMPLEADOS (autenticados)
   // ============================================================
+
+  /**
+   * Validar ubicación sin registrar
+   * POST /api/attendance/validate-location
+   */
+  @Post('validate-location')
+  @HttpCode(HttpStatus.OK)
+  async validateLocation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ValidateLocationDto,
+  ) {
+    return this.attendanceService.validateEmployeeLocation(
+      user.employeeId,
+      dto,
+    );
+  }
 
   /**
    * Registrar asistencia

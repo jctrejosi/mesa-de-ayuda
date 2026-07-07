@@ -40,6 +40,27 @@ export interface AttendanceHistoryResponse {
   offset: number;
 }
 
+export interface ValidateLocationDto {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+}
+
+export interface ValidateLocationResponse {
+  isValid: boolean;
+  message: string;
+  distance: number;
+  maxRadius: number;
+  branch: {
+    id: number;
+    name: string;
+    address: string | null;
+    latitude: string;
+    longitude: string;
+    allowedRadius: number;
+  } | null;
+}
+
 export class AttendanceService {
   /**
    * Registrar asistencia (ENTRY/EXIT)
@@ -102,5 +123,21 @@ export class AttendanceService {
     const response = await api.get("/attendance/stats");
     const data = response.data.data || response.data;
     return data;
+  }
+
+  /**
+   * Validar ubicación sin registrar
+   * POST /attendance/validate-location
+   */
+  static async validateLocation(
+    data: ValidateLocationDto,
+  ): Promise<ValidateLocationResponse> {
+    console.log("📍 [Attendance] Validando ubicación:", data);
+
+    const response = await api.post("/attendance/validate-location", data);
+    const result = response.data.data || response.data;
+
+    console.log("📍 [Attendance] Respuesta validación:", result);
+    return result;
   }
 }
