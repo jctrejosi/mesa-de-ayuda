@@ -858,34 +858,6 @@ function ConfirmationModal({
   );
 }
 
-function ScreenSelector({
-  current,
-  onChange,
-}: {
-  current: AppScreen;
-  onChange: (s: AppScreen) => void;
-}) {
-  const options: { id: AppScreen; label: string }[] = [
-    { id: "loading", label: "Cargando" },
-    { id: "valid", label: "Válido" },
-    { id: "invalid", label: "No válido" },
-    { id: "confirmed", label: "Confirmado" },
-  ];
-  return (
-    <div className="flex items-center gap-1 bg-white/80 backdrop-blur-sm border border-black/[0.08] rounded-full px-1.5 py-1 shadow-sm mx-auto w-fit">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          onClick={() => onChange(o.id)}
-          className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${current === o.id ? "bg-[#2563EB] text-white shadow-sm" : "text-[#64748B] hover:text-[#0F1523]"}`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function AttendanceScreen() {
   const [screen, setScreen] = useState<AppScreen>("loading");
   const [navTab, setNavTab] = useState<NavTab>("asistencia");
@@ -895,6 +867,13 @@ function AttendanceScreen() {
   const [attendanceType, setAttendanceType] =
     useState<AttendanceType>("entrada");
   const { user } = useAuth();
+
+  /*
+    { id: "loading", label: "Cargando" },
+    { id: "valid", label: "Válido" },
+    { id: "invalid", label: "No válido" },
+    { id: "confirmed", label: "Confirmado" },
+  */
 
   const { logout } = useAuth();
 
@@ -926,11 +905,14 @@ function AttendanceScreen() {
   };
 
   useEffect(() => {
-    if (screen === "loading") {
-      const t = setTimeout(() => setScreen("valid"), 2200);
-      return () => clearTimeout(t);
+    if (status === "valid" && screen !== "valid") {
+      setScreen("valid");
+    } else if (status === "invalid" && screen !== "invalid") {
+      setScreen("invalid");
+    } else if (status === "loading" && screen !== "loading") {
+      setScreen("loading");
     }
-  }, [screen]);
+  }, [status]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -955,9 +937,6 @@ function AttendanceScreen() {
           // El contexto manejará la redirección
         }}
       />
-      <div className="px-4 py-2">
-        <ScreenSelector current={screen} onChange={setScreen} />
-      </div>
       <div
         className="flex-1 overflow-y-auto overscroll-contain space-y-3 pb-4 pt-1"
         style={{ scrollbarWidth: "none" }}
