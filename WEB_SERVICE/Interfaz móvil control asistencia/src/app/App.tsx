@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { AuthProvider, useAuth } from "../contexts/auth.context";
 import { useAttendance } from "../hook/useAttendance";
+import logo from "../assets/logo.png";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -162,12 +163,16 @@ function LoginScreen() {
         <div className="relative z-10 flex flex-col h-full p-10">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-[12px] bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center shadow-lg">
-              <LayoutGrid size={22} className="text-white" strokeWidth={1.8} />
+            <div className="w-16 h-16 flex items-center justify-center">
+              <img
+                src={logo}
+                alt="DSI Logo"
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <p className="text-white font-bold text-lg leading-none">
-                NexusERP
+                DSI ERP
               </p>
               <p className="text-blue-200 text-[11px] font-medium mt-0.5">
                 Enterprise Suite
@@ -229,7 +234,7 @@ function LoginScreen() {
                 ))}
               </div>
               <p className="text-blue-50 text-[13px] leading-relaxed italic">
-                "NexusERP transformó completamente la forma en que gestionamos
+                "DSI S.A. transformó completamente la forma en que gestionamos
                 nuestras operaciones."
               </p>
               <div className="flex items-center gap-2 mt-3">
@@ -257,7 +262,7 @@ function LoginScreen() {
           <div className="w-9 h-9 rounded-[10px] bg-[#2563EB] flex items-center justify-center">
             <LayoutGrid size={18} className="text-white" strokeWidth={1.8} />
           </div>
-          <span className="font-bold text-[#0F1523] text-base">NexusERP</span>
+          <span className="font-bold text-[#0F1523] text-base">DSI ERP</span>
         </div>
 
         <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
@@ -290,7 +295,7 @@ function LoginScreen() {
                 </div>
               )}
 
-              {/* Microsoft SSO */}
+              {/* Microsoft SSO
               <button
                 onClick={handleMs}
                 disabled={msLoading || isLoading}
@@ -303,6 +308,7 @@ function LoginScreen() {
                 )}
                 {msLoading ? "Redirigiendo…" : "Iniciar con Microsoft"}
               </button>
+              */}
 
               {/* Divider */}
               <div className="flex items-center gap-3 mb-6">
@@ -455,10 +461,8 @@ function LoginScreen() {
             {/* Footer */}
             <div className="mt-6 text-center space-y-1.5">
               <p className="text-[12px] text-[#94A3B8]">
-                NexusERP v4.2.1 · Desarrollado por{" "}
-                <span className="font-semibold text-[#64748B]">
-                  Nexus Technologies S.A.S.
-                </span>
+                DSI ERP v4.2.1 · Desarrollado por{" "}
+                <span className="font-semibold text-[#64748B]">DSI S.A.</span>
               </p>
               <p className="text-[12px] text-[#94A3B8]">
                 <button className="hover:text-[#2563EB] transition-colors">
