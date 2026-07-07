@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  LayoutDashboard,
   ClipboardList,
-  Settings,
   Search,
   Bell,
   ChevronDown,
@@ -12,7 +10,6 @@ import {
   XCircle,
   MoreVertical,
   X,
-  Filter,
   Download,
   Plus,
   MapPin,
@@ -27,20 +24,19 @@ import {
   LogOut,
   Eye,
   SlidersHorizontal,
-  ArrowUpRight,
   Wifi,
   Navigation,
-  Building2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 import logo from "../assets/logo.png";
+import { UsersView } from "./views/UsersView";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StatusType = "approved" | "rejected" | "late";
 type RecordType = "entry" | "exit";
-type ViewType = "attendance" | "config";
+type ViewType = "attendance" | "users";
 
 interface Employee {
   id: string;
@@ -406,10 +402,10 @@ const Sidebar = ({
       view: "attendance" as ViewType,
     },
     {
-      id: "config",
-      label: "Configuración",
-      icon: Settings,
-      view: "config" as ViewType,
+      id: "users",
+      label: "Usuarios",
+      icon: Users,
+      view: "users" as ViewType,
     },
   ];
 
@@ -426,7 +422,7 @@ const Sidebar = ({
         style={{ borderColor: "var(--sidebar-border)" }}
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 flex items-center justify-center">
+          <div className="w-16 h-16 flex items-center justify-center">
             <img
               src={logo}
               alt="DSI Logo"
@@ -435,13 +431,13 @@ const Sidebar = ({
           </div>
           <div>
             <p className="text-white font-semibold text-sm leading-tight">
-              DSI
+              Mesa de ayuda
             </p>
             <p
               className="text-xs"
               style={{ color: "var(--sidebar-foreground)", opacity: 0.6 }}
             >
-              Módulo Asistencia
+              DSI S.A.
             </p>
           </div>
         </div>
@@ -455,13 +451,11 @@ const Sidebar = ({
           Navegación
         </p>
         {items.map(({ id, label, icon: Icon, view: itemView }) => {
-          const isActive =
-            itemView === view || (id === "attendance" && view === "attendance");
           const active =
             id === "attendance"
               ? view === "attendance"
-              : id === "config"
-                ? view === "config"
+              : id === "users"
+                ? view === "users"
                 : false;
           return (
             <button
@@ -1525,15 +1519,11 @@ export default function App() {
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Navbar
-          title={
-            view === "attendance"
-              ? "Módulo de Asistencia"
-              : "Configuración del Módulo"
-          }
+          title={view === "attendance" ? "Asistencias" : "Usuarios"}
           subtitle={
             view === "attendance"
-              ? "Martes, 1 de julio de 2026 — Sede Central Lima"
-              : "Gestiona geocerca, horarios y validaciones"
+              ? "Martes, 12 de septiembre de 2023"
+              : "Gestiona los usuarios de la plataforma"
           }
         />
 
@@ -1639,16 +1629,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.18 }}
               >
-                <div className="mb-5">
-                  <h2 className="text-sm font-semibold text-slate-700">
-                    Configuración del módulo
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Ajusta los parámetros de geocerca, horario y reglas de
-                    validación.
-                  </p>
-                </div>
-                <ConfigPanel addToast={addToast} />
+                <UsersView />
               </motion.div>
             )}
           </AnimatePresence>
