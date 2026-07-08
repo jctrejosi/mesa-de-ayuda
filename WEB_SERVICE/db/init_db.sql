@@ -283,6 +283,53 @@ CREATE TABLE audit_log (
 ) ENGINE=InnoDB;
 
 -- ============================================================
+-- TABLA: ventas mensuales
+-- ============================================================
+CREATE TABLE sales (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    month_year DATE NOT NULL, -- primer día del mes (ej: '2024-01-01')
+    month_name VARCHAR(20) NOT NULL, -- 'Enero', 'Febrero', ...
+    total DECIMAL(15,2) NOT NULL, -- monto total de ventas
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    UNIQUE KEY uk_sales_month_year (month_year)
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- TABLA: inventario de productos
+-- ============================================================
+CREATE TABLE inventory (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(50) NOT NULL UNIQUE, -- Código interno del producto
+    plu VARCHAR(20), -- PLU
+    ean VARCHAR(50), -- EAN
+    nombre VARCHAR(255) NOT NULL,
+    precio_venta DECIMAL(15,2) NOT NULL, -- Precio de venta unitario
+    saldo INT NOT NULL DEFAULT 0, -- stock disponible
+    imagen VARCHAR(255), -- nombre del archivo de imagen
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_plu (plu),
+    INDEX idx_ean (ean)
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- TABLA OPCIONAL: registros de carga de archivos (auditoría)
+-- ============================================================
+CREATE TABLE data_upload_log (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    file_name VARCHAR(255) NOT NULL, -- nombre del archivo cargado
+    file_type ENUM('sales','inventory') NOT NULL,
+    rows_loaded INT DEFAULT 0,
+    uploaded_by BIGINT UNSIGNED, -- referencia a account.id, si se quiere
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_uploaded_by (uploaded_by)
+) ENGINE=InnoDB;
+
+-- ============================================================
 -- DATA INSERTION
 -- ============================================================
 
