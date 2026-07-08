@@ -1,5 +1,7 @@
 // src/types/api.types.ts
 
+import { ReactNode } from "react";
+
 // ============================================================
 // AUTENTICACIÓN
 // ============================================================
@@ -72,6 +74,8 @@ export interface Person {
 }
 
 export interface Employee {
+  avatarColor: string | undefined;
+  initials: ReactNode;
   id: number;
   personId: number;
   employeeCode: string | null;

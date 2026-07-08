@@ -63,3 +63,32 @@ export interface AttendanceQueryParams {
   orderBy?: "createdAt" | "checkType" | "distance";
   orderDirection?: "ASC" | "DESC";
 }
+
+export type StatusType = "approved" | "rejected" | "late";
+export type RecordType = "entry" | "exit";
+
+export interface Employee {
+  id: string;
+  name: string;
+  code: string;
+  role: string;
+  avatar: string;
+  initials: string;
+  avatarColor: string;
+}
+
+export interface Toast {
+  id: string;
+  type: "success" | "error";
+  message: string;
+}
+
+export interface KPICardProps {
+  label: string;
+  value: number;
+  delta: number;
+  deltaLabel: string;
+  icon: React.ReactNode;
+  color: string;
+  bgColor: string;
+}
