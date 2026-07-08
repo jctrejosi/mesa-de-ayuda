@@ -10,14 +10,16 @@ import {
   MapPin,
   CheckCircle2,
   ChevronRight,
+  BarChart2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 import logo from "../assets/logo.png";
 import { UsersView } from "./views/UsersView";
 import { AttendanceView } from "./views/AttendanceView";
+import { SalesView } from "./views/SalesView";
 
-type ViewType = "attendance" | "users";
+type ViewType = "attendance" | "users" | "config" | "sales";
 
 interface Toast {
   id: string;
@@ -87,6 +89,12 @@ const Sidebar = ({
       label: "Usuarios",
       icon: Users,
       view: "users" as ViewType,
+    },
+    {
+      id: "sales",
+      label: "Ventas",
+      icon: BarChart2,
+      view: "sales" as ViewType,
     },
   ];
 
@@ -329,7 +337,7 @@ export default function App() {
               >
                 <AttendanceView />
               </motion.div>
-            ) : (
+            ) : view === "config" ? (
               <motion.div
                 key="config"
                 initial={{ opacity: 0, y: 8 }}
@@ -339,7 +347,22 @@ export default function App() {
               >
                 <UsersView />
               </motion.div>
-            )}
+            ) : view === "sales" ? (
+              <motion.div
+                key="sales"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.18 }}
+                className="space-y-5"
+              >
+                <SalesView
+                  addToast={function (m: string, t: "success" | "error"): void {
+                    throw new Error("Function not implemented.");
+                  }}
+                />
+              </motion.div>
+            ) : null}
           </AnimatePresence>
         </main>
       </div>
