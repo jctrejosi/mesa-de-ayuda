@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ChevronRight,
   BarChart2,
+  Package,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -18,8 +19,9 @@ import logo from "../assets/logo.png";
 import { UsersView } from "./views/UsersView";
 import { AttendanceView } from "./views/AttendanceView";
 import { SalesView } from "./views/SalesView";
+import { InventoryView } from "./views/InventoryView";
 
-type ViewType = "attendance" | "users" | "config" | "sales";
+type ViewType = "attendance" | "users" | "config" | "sales" | "inventory";
 
 interface Toast {
   id: string;
@@ -95,6 +97,12 @@ const Sidebar = ({
       label: "Ventas",
       icon: BarChart2,
       view: "sales" as ViewType,
+    },
+    {
+      id: "inventory",
+      label: "Inventario",
+      icon: Package,
+      view: "inventory" as ViewType,
     },
   ];
 
@@ -316,11 +324,23 @@ export default function App() {
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Navbar
-          title={view === "attendance" ? "Asistencias" : "Usuarios"}
+          title={
+            view === "attendance"
+              ? "Asistencias"
+              : view === "users"
+                ? "Usuarios"
+                : view === "inventory"
+                  ? "Inventario"
+                  : "Ventas"
+          }
           subtitle={
             view === "attendance"
               ? "Martes, 12 de septiembre de 2023"
-              : "Gestiona los usuarios de la plataforma"
+              : view === "users"
+                ? "Gestiona los usuarios de la plataforma"
+                : view === "inventory"
+                  ? "Catálogo de productos y control de stock"
+                  : "Resumen de facturación mensual"
           }
         />
 
@@ -362,7 +382,22 @@ export default function App() {
                   }}
                 />
               </motion.div>
-            ) : null}
+            ) : (
+              <motion.div
+                key="sales"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.18 }}
+                className="space-y-5"
+              >
+                <InventoryView
+                  addToast={function (m: string, t: "success" | "error"): void {
+                    throw new Error("Function not implemented.");
+                  }}
+                />
+              </motion.div>
+            )}
           </AnimatePresence>
         </main>
       </div>
