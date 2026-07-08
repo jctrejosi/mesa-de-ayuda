@@ -38,74 +38,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Verificar sesión al cargar
+  // Verificar sesión al cargar
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem("access_token");
       const storedUser = localStorage.getItem("user");
 
-      if (token && storedUser) {
+      if (storedUser) {
         try {
-          // ✅ Usar authService.getProfile() correctamente
+          // ✅ La cookie se envía automáticamente con withCredentials
           const profile = await authService.getProfile();
           setUser(profile);
-          setIsLoading(false);
-          return;
+          // Actualizar localStorage con datos frescos
+          localStorage.setItem("user", JSON.stringify(profile));
         } catch (err) {
           console.error("❌ Error al obtener perfil:", err);
-          localStorage.removeItem("access_token");
           localStorage.removeItem("user");
+          setUser(null);
         }
+      } else {
+        setUser(null);
       }
-
-      setUser(null);
       setIsLoading(false);
     };
 
     checkAuth();
   }, []);
 
-  // ✅ Login
   const login = async (credentials: LoginCredentials): Promise<void> => {
     setIsLoading(true);
     setError(null);
     try {
-      // ✅ Usar authService.login()
       const response = await authService.login(credentials);
 
       console.log("📥 Login response:", response);
 
-      // El user ya viene en el formato correcto de authService
-      const userData: User = {
-        id: response.user.id,
-        username: response.user.username,
-        employeeId: response.user.employeeId,
-        fullName: response.user.fullName,
-        email: response.user.email || null,
-        role: response.user.role || "employee",
-        employeeCode:
-          response.user.employeeCode ||
-          `EMP-${String(response.user.employeeId).padStart(4, "0")}`,
-        area: response.user.area || "Sin área asignada",
-        branch: response.user.branch || null,
-        department: response.user.department || null,
-        position: response.user.position || null,
-        photo: response.user.photo || null,
-      };
-
-      localStorage.setItem("access_token", response.access_token);
-      localStorage.setItem("user", JSON.stringify(userData));
-
-      console.log("✅ Token guardado:", localStorage.getItem("access_token"));
-      console.log(
-        "✅ Token length:",
-        localStorage.getItem("access_token")?.length,
-      );
-
-      setUser(userData);
+      // El token está en la cookie, solo guardamos el user
+      localStorage.setItem("user", JSON.stringify(response.user));
+      setUser(response.user);
 
       // Redirigir si es admin
-      if (userData.role === "admin") {
+      if (response.user.role === "admin") {
         console.log("🚀 Admin detectado, redirigiendo a http://localhost:5174");
         window.location.href = "http://localhost:5174";
       }
@@ -120,16 +92,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // ✅ Logout
   const logout = async (): Promise<void> => {
     setIsLoading(true);
     try {
-      // ✅ Usar authService.logout()
       await authService.logout();
     } catch (err) {
       console.warn("⚠️ Error en logout:", err);
     } finally {
-      localStorage.removeItem("access_token");
       localStorage.removeItem("user");
       setUser(null);
       setIsLoading(false);

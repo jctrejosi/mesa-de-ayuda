@@ -13,19 +13,9 @@ const api: AxiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true,
+  timeout: 10000,
 });
-
-// Interceptor: Agregar token a cada petición
-api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
 
 // Interceptor: Manejar errores de autenticación
 api.interceptors.response.use(
@@ -36,9 +26,7 @@ api.interceptors.response.use(
       localStorage.removeItem("access_token");
       localStorage.removeItem("user");
       // Si no estamos en login, redirigir
-      if (!window.location.pathname.includes("/login")) {
-        window.location.href = "/login";
-      }
+      window.location.href = "http://localhost:5173"; // Cambia esto según tu ruta de login
     }
     return Promise.reject(error);
   },
