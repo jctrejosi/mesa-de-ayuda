@@ -280,32 +280,6 @@ export class AttendanceController {
   }
 
   @Get('stats')
-  @ApiOperation({
-    summary: 'Estadísticas de asistencia del empleado',
-    description:
-      'Retorna estadísticas de totales, entradas, salidas, breaks, etc. para el empleado autenticado.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Estadísticas del empleado',
-    schema: {
-      example: {
-        total: 45,
-        entries: 30,
-        exits: 15,
-        breaks: 0,
-        todayCount: 1,
-        weekCount: 5,
-        monthCount: 20,
-      },
-    },
-  })
-  @ApiResponse({ status: 401, description: 'No autenticado' })
-  async getStats(@CurrentUser() user: AuthenticatedUser) {
-    return this.attendanceService.getStats(user.employeeId);
-  }
-
-  @Get('stats/comparative')
   @Roles('admin', 'manager')
   @ApiOperation({
     summary: 'Estadísticas comparativas (hoy vs ayer)',

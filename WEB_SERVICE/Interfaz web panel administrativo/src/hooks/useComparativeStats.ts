@@ -20,7 +20,7 @@ export function useComparativeStats(): UseComparativeStatsReturn {
 
     try {
       console.log("📊 [useComparativeStats] Cargando estadísticas...");
-      const data = await attendanceService.getComparativeStats();
+      const data = await attendanceService.getStats();
       setStats(data);
       console.log("📊 [useComparativeStats] Estadísticas cargadas:", data);
     } catch (err: any) {

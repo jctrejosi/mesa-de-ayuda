@@ -24,7 +24,7 @@ export const StatusChip = ({ status }: { status: StatusType }) => {
       dot: "bg-amber-500",
     },
   };
-  const s = map[status];
+  const s = map[status] || map["approved"];
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${s.bg} ${s.text}`}
