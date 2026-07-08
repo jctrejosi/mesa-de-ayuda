@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { attendanceService } from "../services/attendance.service";
 import type {
-  AttendanceWithRelations,
+  AttendanceRecord,
   AttendanceHistoryQueryParams,
+  AttendanceListResponse,
 } from "../types/attendance.types";
 
 interface UseAdvancedAttendanceReturn {
-  records: AttendanceWithRelations[];
+  records: AttendanceRecord[];
   loading: boolean;
   error: string | null;
   total: number;
@@ -22,17 +23,19 @@ interface UseAdvancedAttendanceReturn {
 }
 
 export function useAttendanceRecords(
-  initialFilters: Omit<AttendanceHistoryQueryParams, "page" | "limit"> = {},
+  initialFilters: Partial<
+    Omit<AttendanceHistoryQueryParams, "page" | "limit">
+  > = {},
   limit: number = 20,
 ): UseAdvancedAttendanceReturn {
-  const [records, setRecords] = useState<AttendanceWithRelations[]>([]);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [filters, setFilters] =
-    useState<Omit<AttendanceHistoryQueryParams, "page" | "limit">>(
+    useState<Partial<Omit<AttendanceHistoryQueryParams, "page" | "limit">>>(
       initialFilters,
     );
   const [hasMore, setHasMore] = useState(true);
@@ -43,7 +46,7 @@ export function useAttendanceRecords(
       setError(null);
 
       try {
-        console.log("📋 [useAdvancedAttendance] Cargando página", newPage, {
+        console.log("📋 [useAttendanceRecords] Cargando página", newPage, {
           filters,
           limit,
         });
@@ -54,7 +57,7 @@ export function useAttendanceRecords(
           ...filters,
         };
 
-        const response = await attendanceService.getAttendanceHistory(params);
+        const response = await attendanceService.findAll(params);
 
         const {
           records: newRecords,
@@ -72,15 +75,8 @@ export function useAttendanceRecords(
         setPage(newPage);
         setTotalPages(totalPagesCount);
         setHasMore(newPage < totalPagesCount);
-
-        console.log("📋 [useAdvancedAttendance] Cargados:", {
-          count: newRecords.length,
-          total: totalRecords,
-          totalPages: totalPagesCount,
-          currentPage: newPage,
-        });
       } catch (err: unknown) {
-        console.error("❌ [useAdvancedAttendance] Error:", err);
+        console.error("❌ [useAttendanceRecords] Error:", err);
         setError(
           err instanceof Error ? err.message : "Error al cargar registros",
         );

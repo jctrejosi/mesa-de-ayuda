@@ -1,14 +1,14 @@
 // ─── Data Table ───────────────────────────────────────────────────────────────
 import { ClipboardList } from "lucide-react";
-import { AttendanceWithRelations } from "../../../types";
+import { AttendanceRecord } from "../../../types";
 import { Avatar, RecordTypeChip, StatusChip } from "./UtilsComponents";
 
 export const DataTable = ({
   records,
   onRowClick,
 }: {
-  records: AttendanceWithRelations[];
-  onRowClick: (r: AttendanceWithRelations) => void;
+  records: AttendanceRecord[];
+  onRowClick: (r: AttendanceRecord) => void;
 }) => {
   const getInitials = (fullName: string): string => {
     return fullName
@@ -40,23 +40,16 @@ export const DataTable = ({
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-border bg-slate-50">
-            {[
-              "Empleado",
-              "Código",
-              "Fecha",
-              "Hora",
-              "Tipo",
-              "Estado",
-              "Distancia",
-              "Acciones",
-            ].map((h) => (
-              <th
-                key={h}
-                className="px-4 py-3 text-left font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap"
-              >
-                {h}
-              </th>
-            ))}
+            {["Empleado", "Código", "Fecha", "Hora", "Tipo", "Estado"].map(
+              (h) => (
+                <th
+                  key={h}
+                  className="px-4 py-3 text-left font-semibold text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap"
+                >
+                  {h}
+                </th>
+              ),
+            )}
           </tr>
         </thead>
         <tbody>
@@ -89,11 +82,11 @@ export const DataTable = ({
                 {r.time}
               </td>
               <td className="px-4 py-3">
-                <RecordTypeChip type={r.type === "ENTRY" ? "entry" : "exit"} />
+                <RecordTypeChip type={r.type === "entry" ? "entry" : "exit"} />
               </td>
               <td className="px-4 py-3">
                 <StatusChip
-                  status={r.status === "APPROVED" ? "approved" : "rejected"}
+                  status={r.status === "approved" ? "approved" : "rejected"}
                 />
               </td>
             </tr>

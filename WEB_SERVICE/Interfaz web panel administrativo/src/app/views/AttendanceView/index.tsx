@@ -14,7 +14,7 @@ import { useAttendanceRecords } from "../../../hooks/useAttendanceRecords";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-import { AttendanceWithRelations, Filters, Toast } from "../../../types";
+import { AttendanceRecord, Filters, Toast } from "../../../types";
 
 export const AttendanceView = () => {
   const [filters, setFilters] = useState<Filters>({
@@ -26,8 +26,9 @@ export const AttendanceView = () => {
   });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showManual, setShowManual] = useState(false);
-  const [selectedRecord, setSelectedRecord] =
-    useState<AttendanceWithRelations | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(
+    null,
+  );
 
   const { stats, loading, error, refresh } = useComparativeStats();
   const {

@@ -10,7 +10,6 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { SentryFilter } from './common/filters/sentry.filter';
-import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { SentryModule } from './modules/sentry/sentry.module';
@@ -66,10 +65,6 @@ import { AuditLogModule } from './modules/audit/audit-log.module';
     {
       provide: APP_FILTER,
       useClass: SentryFilter,
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: TransformInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

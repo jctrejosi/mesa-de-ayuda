@@ -13,34 +13,22 @@ export interface ComparativeStats {
   };
 }
 
-export interface AttendanceRecord {
-  employee?: Employee;
-  status: string;
-  type: string;
-  id: number;
-  employeeId: number;
-  branchId: number;
-  checkType: "ENTRY" | "EXIT" | "BREAK_START" | "BREAK_END";
-  latitude: string | null;
-  longitude: string | null;
-  accuracy: number | null;
-  distance: number | null;
-  ip: string | null;
-  device: string | null;
-  createdAt: string;
+export interface Employee {
+  code: string;
+  fullName: string;
+  photo: string | null;
 }
 
-export interface AttendanceWithRelations {
+export type StatusType = "approved" | "rejected" | "late";
+export type RecordType = "entry" | "exit";
+
+export interface AttendanceRecord {
   id: number;
-  employee: {
-    code: string;
-    fullName: string;
-    photo: string | null;
-  };
+  employee: Employee;
   date: string; // 'YYYY-MM-DD'
   time: string; // 'HH:mm:ss'
-  type: "ENTRY" | "EXIT" | "BREAK_START" | "BREAK_END";
-  status: "APPROVED" | "LATE" | "REJECTED";
+  type: RecordType;
+  status: StatusType;
   distance: number | null;
   branch: {
     name: string;
@@ -48,36 +36,22 @@ export interface AttendanceWithRelations {
   };
   createdAt: string;
 }
-
 export interface AttendanceHistoryQueryParams {
-  page?: number;
-  limit?: number;
+  page: number;
+  limit: number;
   startDate?: string;
   endDate?: string;
-  type?: "ENTRY" | "EXIT" | "BREAK_START" | "BREAK_END";
-  status?: "APPROVED" | "LATE" | "REJECTED";
+  type?: RecordType;
+  status?: StatusType;
   search?: string;
 }
 
 export interface AttendanceListResponse {
-  records: AttendanceWithRelations[];
+  records: AttendanceRecord[];
   total: number;
   limit: number;
-  offset: number;
+  page: number;
   totalPages: number;
-}
-
-export type StatusType = "approved" | "rejected" | "late";
-export type RecordType = "entry" | "exit";
-
-export interface Employee {
-  id: string;
-  name: string;
-  code: string;
-  role: string;
-  avatar: string;
-  initials: string;
-  avatarColor: string;
 }
 
 export interface Toast {

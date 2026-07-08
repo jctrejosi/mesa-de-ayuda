@@ -69,7 +69,7 @@ export class AttendanceController {
     type: AttendanceHistoryResponseDto,
   })
   async getAttendanceHistory(
-    @Body() body: AttendanceHistoryQueryDto, // ← Cambiar @Query por @Body
+    @Body() body: AttendanceHistoryQueryDto,
   ): Promise<AttendanceHistoryResponseDto> {
     return this.attendanceService.getAttendanceHistory(body);
   }

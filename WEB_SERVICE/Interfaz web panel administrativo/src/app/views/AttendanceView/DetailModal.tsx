@@ -2,7 +2,7 @@
 
 import { X, MapPin, Wifi, CheckCircle2 } from "lucide-react";
 import { motion } from "motion/react";
-import { AttendanceWithRelations } from "../../../types";
+import { AttendanceRecord } from "../../../types";
 import { Avatar, StatusChip } from "./UtilsComponents";
 
 const statusMap = {
@@ -15,7 +15,7 @@ export const DetailModal = ({
   record,
   onClose,
 }: {
-  record: AttendanceWithRelations;
+  record: AttendanceRecord;
   onClose: () => void;
 }) => {
   const getInitials = (fullName: string): string => {
@@ -89,26 +89,11 @@ export const DetailModal = ({
                 { label: "Hora", value: record.time },
                 {
                   label: "Tipo",
-                  value:
-                    record.type === "ENTRY"
-                      ? "Entrada"
-                      : record.type === "EXIT"
-                        ? "Salida"
-                        : record.type === "BREAK_START"
-                          ? "Inicio de descanso"
-                          : record.type === "BREAK_END"
-                            ? "Fin de descanso"
-                            : record.type,
+                  value: record.type,
                 },
                 {
                   label: "Estado",
-                  value: (
-                    <StatusChip
-                      status={
-                        record.status === "APPROVED" ? "approved" : "rejected"
-                      }
-                    />
-                  ),
+                  value: <StatusChip status={record.status} />,
                 },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-slate-50 rounded-xl p-3">
