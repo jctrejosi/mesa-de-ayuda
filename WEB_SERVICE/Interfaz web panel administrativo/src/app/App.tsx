@@ -21,13 +21,14 @@ import { AttendanceView } from "./views/AttendanceView";
 import { SalesView } from "./views/SalesView";
 import { InventoryView } from "./views/InventoryView";
 
-type ViewType = "attendance" | "users" | "config" | "sales" | "inventory";
+type ViewType = "attendance" | "users" | "sales" | "inventory";
 
 interface Toast {
   id: string;
   type: "success" | "error";
   message: string;
 }
+
 // ─── Toast System ─────────────────────────────────────────────────────────────
 
 const ToastContainer = ({
@@ -79,32 +80,52 @@ const Sidebar = ({
   view: ViewType;
   setView: (v: ViewType) => void;
 }) => {
-  const items = [
-    {
-      id: "attendance",
-      label: "Asistencia",
-      icon: ClipboardList,
-      view: "attendance" as ViewType,
-    },
-    {
-      id: "users",
-      label: "Usuarios",
-      icon: Users,
-      view: "users" as ViewType,
-    },
+  // Agrupamos los items
+  const comercialItems = [
     {
       id: "sales",
       label: "Ventas",
       icon: BarChart2,
-      view: "sales" as ViewType,
     },
     {
       id: "inventory",
       label: "Inventario",
       icon: Package,
-      view: "inventory" as ViewType,
     },
   ];
+
+  const adminItems = [
+    {
+      id: "attendance",
+      label: "Asistencia",
+      icon: ClipboardList,
+    },
+    {
+      id: "users",
+      label: "Usuarios",
+      icon: Users,
+    },
+  ];
+
+  const renderItems = (items: typeof comercialItems) =>
+    items.map(({ id, label, icon: Icon }) => {
+      const active = id === view;
+      return (
+        <button
+          key={id}
+          onClick={() => setView(id as ViewType)}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left ${
+            active
+              ? "bg-blue-600 text-white shadow-sm"
+              : "hover:bg-white/5 text-slate-400 hover:text-white"
+          }`}
+        >
+          <Icon size={16} />
+          {label}
+          {active && <ChevronRight size={13} className="ml-auto opacity-70" />}
+        </button>
+      );
+    });
 
   return (
     <aside
@@ -140,38 +161,28 @@ const Sidebar = ({
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        <p
-          className="text-[10px] font-semibold uppercase tracking-widest px-3 py-2"
-          style={{ color: "var(--sidebar-foreground)", opacity: 0.4 }}
-        >
-          Navegación
-        </p>
-        {items.map(({ id, label, icon: Icon, view: itemView }) => {
-          const active =
-            id === "attendance"
-              ? view === "attendance"
-              : id === "users"
-                ? view === "users"
-                : false;
-          return (
-            <button
-              key={id}
-              onClick={() => itemView && setView(itemView)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left ${
-                active
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "hover:bg-white/5 text-slate-400 hover:text-white"
-              }`}
-            >
-              <Icon size={16} />
-              {label}
-              {active && (
-                <ChevronRight size={13} className="ml-auto opacity-70" />
-              )}
-            </button>
-          );
-        })}
+      <nav className="flex-1 px-3 py-4 space-y-4">
+        {/* Grupo Comercial */}
+        <div>
+          <p
+            className="text-[10px] font-semibold uppercase tracking-widest px-3 py-2"
+            style={{ color: "var(--sidebar-foreground)", opacity: 0.4 }}
+          >
+            Comercial
+          </p>
+          <div className="space-y-0.5">{renderItems(comercialItems)}</div>
+        </div>
+
+        {/* Grupo Administración */}
+        <div>
+          <p
+            className="text-[10px] font-semibold uppercase tracking-widest px-3 py-2"
+            style={{ color: "var(--sidebar-foreground)", opacity: 0.4 }}
+          >
+            Administración
+          </p>
+          <div className="space-y-0.5">{renderItems(adminItems)}</div>
+        </div>
       </nav>
 
       <div
@@ -309,11 +320,33 @@ const Navbar = ({ title, subtitle }: { title: string; subtitle: string }) => {
 
 export default function App() {
   const [view, setView] = useState<ViewType>("attendance");
-
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = (message: string, type: "success" | "error") => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
 
   const dismissToast = (id: string) =>
     setToasts((t) => t.filter((x) => x.id !== id));
+
+  const renderView = () => {
+    switch (view) {
+      case "attendance":
+        return <AttendanceView />;
+      case "users":
+        return <UsersView />;
+      case "sales":
+        return <SalesView addToast={addToast} />;
+      case "inventory":
+        return <InventoryView addToast={addToast} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div
@@ -346,58 +379,22 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto p-6">
           <AnimatePresence mode="wait">
-            {view === "attendance" ? (
-              <motion.div
-                key="attendance"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-5"
-              >
-                <AttendanceView />
-              </motion.div>
-            ) : view === "config" ? (
-              <motion.div
-                key="config"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18 }}
-              >
-                <UsersView />
-              </motion.div>
-            ) : view === "sales" ? (
-              <motion.div
-                key="sales"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-5"
-              >
-                <SalesView
-                  addToast={function (m: string, t: "success" | "error"): void {
-                    throw new Error("Function not implemented.");
-                  }}
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="sales"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-5"
-              >
-                <InventoryView
-                  addToast={function (m: string, t: "success" | "error"): void {
-                    throw new Error("Function not implemented.");
-                  }}
-                />
-              </motion.div>
-            )}
+            <motion.div
+              key={view}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+              className={
+                view === "attendance" ||
+                view === "sales" ||
+                view === "inventory"
+                  ? "space-y-5"
+                  : ""
+              }
+            >
+              {renderView()}
+            </motion.div>
           </AnimatePresence>
         </main>
       </div>
