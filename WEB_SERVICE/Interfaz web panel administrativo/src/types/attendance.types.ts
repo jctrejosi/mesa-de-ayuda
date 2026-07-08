@@ -49,16 +49,14 @@ export interface AttendanceWithRelations {
   createdAt: string;
 }
 
-export interface AttendanceQueryParams {
+export interface AttendanceHistoryQueryParams {
+  page?: number;
+  limit?: number;
   startDate?: string;
   endDate?: string;
   type?: "ENTRY" | "EXIT" | "BREAK_START" | "BREAK_END";
-  employeeId?: number;
-  branchId?: number;
-  limit?: number;
-  offset?: number;
-  orderBy?: "createdAt" | "checkType" | "distance";
-  orderDirection?: "ASC" | "DESC";
+  status?: "APPROVED" | "LATE" | "REJECTED";
+  search?: string;
 }
 
 export interface AttendanceListResponse {
@@ -66,6 +64,7 @@ export interface AttendanceListResponse {
   total: number;
   limit: number;
   offset: number;
+  totalPages: number;
 }
 
 export type StatusType = "approved" | "rejected" | "late";

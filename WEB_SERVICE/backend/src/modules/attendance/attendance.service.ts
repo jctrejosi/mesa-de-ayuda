@@ -462,15 +462,7 @@ export class AttendanceService {
   async getAttendanceHistory(
     query: AttendanceHistoryQueryDto,
   ): Promise<AttendanceHistoryResponseDto> {
-    const {
-      page = 1,
-      limit = 20,
-      startDate,
-      endDate,
-      type,
-      status,
-      search,
-    } = query;
+    const { page, limit, startDate, endDate, type, status, search } = query;
     const offset = (page - 1) * limit;
 
     // 1. Construir condiciones
@@ -489,7 +481,6 @@ export class AttendanceService {
     if (type) {
       conditions.push(eq(attendance.checkType, type));
     }
-    // El estado se calcula, no se puede filtrar directamente en SQL, lo haremos después
 
     if (search) {
       const searchTerm = `%${search.toLowerCase()}%`;
@@ -504,7 +495,7 @@ export class AttendanceService {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // 2. Consulta principal con JOIN
+    // 2. Consulta principal con JOIN (con LIMIT y OFFSET)
     const rawRecords = await this.db
       .select({
         id: attendance.id,
@@ -533,17 +524,7 @@ export class AttendanceService {
       .limit(limit)
       .offset(offset);
 
-    // 3. Contar total (sin paginación)
-    const countResult = await this.db
-      .select({ total: sql<number>`COUNT(*)` })
-      .from(attendance)
-      .leftJoin(employee, eq(attendance.employeeId, employee.id))
-      .leftJoin(person, eq(employee.personId, person.id))
-      .leftJoin(branch, eq(attendance.branchId, branch.id))
-      .where(whereClause);
-    const total = Number(countResult[0]?.total || 0);
-
-    // 4. Mapear y calcular estado
+    // 3. Mapear y calcular estado
     const records: AttendanceHistoryRecordDto[] = rawRecords.map((row) => {
       const status = this.calculateStatus(row);
       const fullName = [
@@ -575,30 +556,39 @@ export class AttendanceService {
       };
     });
 
-    // 5. Filtrar por estado (porque se calcula en memoria)
+    // 4. Filtrar por estado (si se solicita)
     let filteredRecords = records;
-    if (status) {
-      const statusFilter =
-        status === 'approved'
-          ? 'APPROVED'
-          : status === 'late'
-            ? 'LATE'
-            : 'REJECTED_LOCATION';
+    let filteredTotal = records.length;
 
+    if (status) {
+      const statusFilter = status; // Ya viene en mayúsculas
       filteredRecords = records.filter((r) => r.status === statusFilter);
+      filteredTotal = filteredRecords.length;
     }
 
-    // Nota: el total sigue siendo el total sin filtrar por estado, pero podríamos
-    // recalcular el total en base a los filtrados si es necesario.
-    // Para simplificar, devolvemos el total original y el frontend usará
-    // el length de filteredRecords para saber cuántos hay en esta página.
+    // 5. Obtener el total REAL (sin paginar, pero con los mismos filtros)
+    const countResult = await this.db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(attendance)
+      .leftJoin(employee, eq(attendance.employeeId, employee.id))
+      .leftJoin(person, eq(employee.personId, person.id))
+      .leftJoin(branch, eq(attendance.branchId, branch.id))
+      .where(whereClause);
+    const total = Number(countResult[0]?.total || 0);
+
+    // 6. NOTA: Si se aplica filtro por estado, el total real debería recalcularse
+    // pero como el estado se calcula en memoria, el total no es exacto.
+    // Para una solución más precisa, se podría hacer una segunda consulta
+    // o calcular el total en una vista/materialized view.
 
     return {
       records: filteredRecords,
-      total,
+      total: status ? filteredTotal : total, // ← Si hay filtro por estado, usar el filtrado
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: status
+        ? Math.ceil(filteredTotal / limit)
+        : Math.ceil(total / limit),
     };
   }
 

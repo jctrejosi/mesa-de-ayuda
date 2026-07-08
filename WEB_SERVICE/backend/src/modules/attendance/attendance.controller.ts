@@ -54,53 +54,24 @@ export class AttendanceController {
   // EMPLOYEE ENDPOINTS
   // ============================================================
 
-  @Get('history')
+  @Post('history')
   @Roles('admin', 'manager')
   @ApiOperation({
     summary:
       '[Admin/Manager] Historial avanzado con paginación, filtros y estado calculado',
     description:
-      'Retorna historial completo con foto, nombre, código, sucursal y estado (approved/late/rejected).',
+      'Retorna historial completo con foto, nombre, código, sucursal y estado (APPROVED/LATE/REJECTED).',
   })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({
-    name: 'startDate',
-    required: false,
-    type: String,
-    description: 'YYYY-MM-DD',
-  })
-  @ApiQuery({
-    name: 'endDate',
-    required: false,
-    type: String,
-    description: 'YYYY-MM-DD',
-  })
-  @ApiQuery({
-    name: 'type',
-    required: false,
-    enum: ['ENTRY', 'EXIT', 'BREAK_START', 'BREAK_END'],
-  })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    enum: ['approved', 'late', 'rejected'],
-  })
-  @ApiQuery({
-    name: 'search',
-    required: false,
-    type: String,
-    description: 'Buscar por nombre o código',
-  })
+  @ApiBody({ type: AttendanceHistoryQueryDto })
   @ApiResponse({
     status: 200,
     description: 'Historial avanzado paginado',
     type: AttendanceHistoryResponseDto,
   })
   async getAttendanceHistory(
-    @Query() query: AttendanceHistoryQueryDto,
+    @Body() body: AttendanceHistoryQueryDto, // ← Cambiar @Query por @Body
   ): Promise<AttendanceHistoryResponseDto> {
-    return this.attendanceService.getAttendanceHistory(query);
+    return this.attendanceService.getAttendanceHistory(body);
   }
 
   @Post('validate-location')

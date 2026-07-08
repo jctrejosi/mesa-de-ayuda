@@ -4,6 +4,7 @@ import type {
   AttendanceWithRelations,
   AttendanceListResponse,
   ComparativeStats,
+  AttendanceHistoryQueryParams,
 } from "../types";
 
 export const attendanceService = {
@@ -67,7 +68,7 @@ export const attendanceService = {
     params?: Omit<AttendanceListResponse, "employeeId">,
   ): Promise<AttendanceListResponse> {
     const response = await api.get<AttendanceListResponse>(
-      "/attendance/history",
+      "/attendance/history/employee",
       {
         params: { ...params, employeeId },
       },
@@ -75,10 +76,43 @@ export const attendanceService = {
     return response.data;
   },
 
+  /**
+   * Historial avanzado con paginación, filtros y estado calculado
+   * POST /attendance/history
+   *
+   * @param params - Filtros y paginación
+   * @returns Historial avanzado con foto, nombre, código, sucursal y estado
+   *
+   * @example
+   * const result = await attendanceService.getAdvancedHistory({
+   *   page: 1,
+   *   limit: 20,
+   *   startDate: '2026-06-01',
+   *   endDate: '2026-07-08',
+   *   type: 'ENTRY',
+   *   status: 'APPROVED',
+   *   search: 'Ana'
+   * });
+   */
+  async getAttendanceHistory(
+    params: AttendanceHistoryQueryParams,
+  ): Promise<AttendanceListResponse> {
+    console.log("📋 [Attendance] Obteniendo historial avanzado:", params);
+
+    const response = await api.post<AttendanceListResponse>(
+      "/attendance/history",
+      params,
+    );
+
+    const data = response.data;
+
+    return data;
+  },
+
   async getComparativeStats(): Promise<ComparativeStats> {
     console.log("📊 [Attendance] Obteniendo estadísticas comparativas...");
 
-    const response = await api.get("/attendance/stats/comparative");
+    const response = await api.get("/attendance/stats");
     const data = response.data.data || response.data;
 
     console.log("📊 [Attendance] Estadísticas:", data);

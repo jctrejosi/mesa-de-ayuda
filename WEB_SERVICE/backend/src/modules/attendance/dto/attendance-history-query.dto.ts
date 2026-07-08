@@ -6,24 +6,33 @@ import {
   Min,
   IsDateString,
   MaxLength,
+  IsDefined,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AttendanceHistoryQueryDto {
-  @ApiPropertyOptional({ description: 'Página (empieza en 1)', example: 1 })
-  @IsOptional()
+  @ApiProperty({
+    description: 'Página (empieza en 1)',
+    example: 1,
+    required: true,
+  })
+  @IsDefined({ message: 'La página es requerida' })
   @IsInt({ message: 'La página debe ser un número entero' })
   @Min(1, { message: 'La página debe ser mayor o igual a 1' })
   @Type(() => Number)
-  page?: number = 1;
+  page!: number;
 
-  @ApiPropertyOptional({ description: 'Registros por página', example: 20 })
-  @IsOptional()
+  @ApiProperty({
+    description: 'Registros por página',
+    example: 20,
+    required: true,
+  })
+  @IsDefined({ message: 'El límite es requerido' })
   @IsInt({ message: 'El límite debe ser un número entero' })
   @Min(1, { message: 'El límite debe ser mayor o igual a 1' })
   @Type(() => Number)
-  limit?: number = 20;
+  limit!: number;
 
   @ApiPropertyOptional({
     description: 'Fecha de inicio (YYYY-MM-DD)',
@@ -50,12 +59,12 @@ export class AttendanceHistoryQueryDto {
   type?: 'ENTRY' | 'EXIT' | 'BREAK_START' | 'BREAK_END';
 
   @ApiPropertyOptional({
-    enum: ['approved', 'late', 'rejected'],
-    description: 'Estado del registro',
+    enum: ['APPROVED', 'LATE', 'REJECTED'],
+    description: 'Estado del registro (mayúsculas)',
   })
   @IsOptional()
-  @IsEnum(['approved', 'late', 'rejected'])
-  status?: 'approved' | 'late' | 'rejected';
+  @IsEnum(['APPROVED', 'LATE', 'REJECTED'])
+  status?: 'APPROVED' | 'LATE' | 'REJECTED';
 
   @ApiPropertyOptional({
     description: 'Buscar por nombre o código de empleado',
