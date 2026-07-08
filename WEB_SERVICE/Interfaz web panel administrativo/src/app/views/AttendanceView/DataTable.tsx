@@ -1,13 +1,25 @@
 // ─── Data Table ───────────────────────────────────────────────────────────────
-import { AttendanceRecord } from "../../../types";
+import { ClipboardList } from "lucide-react";
+import { AttendanceWithRelations } from "../../../types";
+import { Avatar, RecordTypeChip, StatusChip } from "./UtilsComponents";
 
 export const DataTable = ({
   records,
   onRowClick,
 }: {
-  records: AttendanceRecord[];
-  onRowClick: (r: AttendanceRecord) => void;
+  records: AttendanceWithRelations[];
+  onRowClick: (r: AttendanceWithRelations) => void;
 }) => {
+  const getInitials = (fullName: string): string => {
+    return fullName
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word[0].toUpperCase())
+      .slice(0, 2)
+      .join("");
+  };
+
   if (records.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-border py-20 flex flex-col items-center gap-3">
@@ -56,9 +68,12 @@ export const DataTable = ({
             >
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2.5">
-                  <Avatar employee={r.employee} size="sm" />
+                  <Avatar
+                    initials={getInitials(r.employee.fullName)}
+                    size="sm"
+                  />
                   <span className="font-medium text-slate-700">
-                    {r.employee.name}
+                    {r.employee.fullName}
                   </span>
                 </div>
               </td>
@@ -74,20 +89,12 @@ export const DataTable = ({
                 {r.time}
               </td>
               <td className="px-4 py-3">
-                <RecordTypeChip type={r.type} />
+                <RecordTypeChip type={r.type === "ENTRY" ? "entry" : "exit"} />
               </td>
               <td className="px-4 py-3">
-                <StatusChip status={r.status} />
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className={`font-medium ${r.distance > 100 ? "text-red-600" : r.distance > 50 ? "text-amber-600" : "text-green-600"}`}
-                >
-                  {r.distance} m
-                </span>
-              </td>
-              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                <RowMenu onView={() => onRowClick(r)} />
+                <StatusChip
+                  status={r.status === "APPROVED" ? "approved" : "rejected"}
+                />
               </td>
             </tr>
           ))}

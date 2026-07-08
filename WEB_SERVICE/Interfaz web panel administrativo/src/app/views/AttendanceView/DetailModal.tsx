@@ -2,16 +2,32 @@
 
 import { X, MapPin, Wifi, CheckCircle2 } from "lucide-react";
 import { motion } from "motion/react";
-import { AttendanceRecord } from "../../../types";
+import { AttendanceWithRelations } from "../../../types";
 import { Avatar, StatusChip } from "./UtilsComponents";
+
+const statusMap = {
+  APPROVED: "approved",
+  LATE: "late",
+  REJECTED: "rejected",
+} as const;
 
 export const DetailModal = ({
   record,
   onClose,
 }: {
-  record: AttendanceRecord;
+  record: AttendanceWithRelations;
   onClose: () => void;
 }) => {
+  const getInitials = (fullName: string): string => {
+    return fullName
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word[0].toUpperCase())
+      .slice(0, 2)
+      .join("");
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <motion.div
@@ -47,13 +63,14 @@ export const DetailModal = ({
         <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
           {/* Employee */}
           <div className="flex items-center gap-4 p-4 rounded-xl bg-blue-50 border border-blue-100">
-            <Avatar employee={record.employee} size="lg" />
+            <Avatar
+              avatarColor="blue"
+              initials={getInitials(record.employee.fullName)}
+              size="lg"
+            />
             <div>
               <p className="font-semibold text-slate-800">
-                {record.employee.name}
-              </p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {record.employee.role}
+                {record.employee.fullName}
               </p>
               <span className="font-mono text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded mt-1 inline-block">
                 {record.employee.code}
@@ -68,15 +85,30 @@ export const DetailModal = ({
             </p>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Fecha", value: record.accuracy },
+                { label: "Fecha", value: record.date },
                 { label: "Hora", value: record.time },
                 {
                   label: "Tipo",
-                  value: record.type === "entry" ? "Entrada" : "Salida",
+                  value:
+                    record.type === "ENTRY"
+                      ? "Entrada"
+                      : record.type === "EXIT"
+                        ? "Salida"
+                        : record.type === "BREAK_START"
+                          ? "Inicio de descanso"
+                          : record.type === "BREAK_END"
+                            ? "Fin de descanso"
+                            : record.type,
                 },
                 {
                   label: "Estado",
-                  value: <StatusChip status={record.status} />,
+                  value: (
+                    <StatusChip
+                      status={
+                        record.status === "APPROVED" ? "approved" : "rejected"
+                      }
+                    />
+                  ),
                 },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-slate-50 rounded-xl p-3">
@@ -92,97 +124,6 @@ export const DetailModal = ({
                   )}
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Location */}
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
-              Ubicación
-            </p>
-            <div className="grid grid-cols-3 gap-3 mb-3">
-              {[
-                {
-                  label: "Latitud",
-                  value: record.coordinates.lat.toFixed(4),
-                  icon: Navigation,
-                },
-                {
-                  label: "Longitud",
-                  value: record.coordinates.lng.toFixed(4),
-                  icon: Navigation,
-                },
-                {
-                  label: "Distancia",
-                  value: `${record.distance} m`,
-                  icon: MapPin,
-                },
-              ].map(({ label, value, icon: Icon }) => (
-                <div key={label} className="bg-slate-50 rounded-xl p-3">
-                  <div className="flex items-center gap-1 mb-1">
-                    <Icon size={10} className="text-slate-400" />
-                    <p className="text-[10px] text-slate-400 font-medium">
-                      {label}
-                    </p>
-                  </div>
-                  <p className="text-xs font-semibold text-slate-700 font-mono">
-                    {value}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-3">
-              <Wifi size={12} className="text-slate-400" />
-              <p className="text-xs text-slate-500">Precisión GPS:</p>
-              <p className="text-xs font-semibold text-slate-700">
-                {record.gpsAccuracy} m
-              </p>
-              <span
-                className={`ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full ${record.gpsAccuracy <= 5 ? "bg-green-100 text-green-700" : record.gpsAccuracy <= 10 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}
-              >
-                {record.gpsAccuracy <= 5
-                  ? "Alta precisión"
-                  : record.gpsAccuracy <= 10
-                    ? "Precisión media"
-                    : "Baja precisión"}
-              </span>
-            </div>
-          </div>
-
-          {/* Map placeholder */}
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
-              Mapa
-            </p>
-            <div className="rounded-xl overflow-hidden border border-border h-44 bg-blue-50 relative flex items-center justify-center">
-              <div
-                className="absolute inset-0 opacity-10"
-                style={{
-                  backgroundImage:
-                    "radial-gradient(circle at 1px 1px, #2563EB 1px, transparent 0)",
-                  backgroundSize: "20px 20px",
-                }}
-              />
-              {/* Geocerca circle */}
-              <div className="relative">
-                <div className="w-32 h-32 rounded-full border-2 border-dashed border-blue-400 bg-blue-100/40 flex items-center justify-center">
-                  <div
-                    className={`w-3 h-3 rounded-full shadow-lg ${record.distance > 100 ? "bg-red-500" : "bg-blue-600"}`}
-                    style={{
-                      transform: `translate(${Math.min(record.distance / 3, 48)}px, ${Math.min(record.distance / 5, 32)}px)`,
-                    }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-2 h-2 rounded-full bg-green-500" />
-                  </div>
-                </div>
-                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] text-slate-500 text-center">
-                  <span className="w-2 h-2 rounded-full bg-green-500 inline-block mr-1" />
-                  Sede
-                  <span className="ml-3 w-2 h-2 rounded-full bg-blue-500 inline-block mr-1" />
-                  Empleado
-                </div>
-              </div>
             </div>
           </div>
         </div>

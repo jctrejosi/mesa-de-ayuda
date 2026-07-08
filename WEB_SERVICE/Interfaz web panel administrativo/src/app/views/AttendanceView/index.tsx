@@ -1,27 +1,11 @@
-import { useState, useRef, useEffect } from "react";
-import {
-  ClipboardList,
-  Search,
-  Users,
-  Clock,
-  AlertTriangle,
-  XCircle,
-  MoreVertical,
-  X,
-  Download,
-  Plus,
-  MapPin,
-  Calendar,
-  CheckCircle2,
-  TrendingUp,
-  TrendingDown,
-  LogIn,
-  LogOut,
-  Eye,
-  Wifi,
-  Navigation,
-} from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { useState } from "react";
+
+// ─── Components ────────────────────────────────────────────────────────────────────
+
+import { Users, Clock, AlertTriangle } from "lucide-react";
+import { FilterBar } from "./FilterBar";
+import { DataTable } from "./DataTable";
+import { KPICard } from "./KpiCard";
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
@@ -30,10 +14,7 @@ import { useAttendanceRecords } from "../../../hooks/useAttendanceRecords";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-import { AttendanceRecord, Toast } from "../../../types";
-import { FilterBar, Filters } from "./FilterBar";
-import { DataTable } from "./DataTable";
-import { KPICard } from "./KpiCard";
+import { AttendanceWithRelations, Filters, Toast } from "../../../types";
 
 export const AttendanceView = () => {
   const [filters, setFilters] = useState<Filters>({
@@ -45,9 +26,8 @@ export const AttendanceView = () => {
   });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showManual, setShowManual] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(
-    null,
-  );
+  const [selectedRecord, setSelectedRecord] =
+    useState<AttendanceWithRelations | null>(null);
 
   const { stats, loading, error, refresh } = useComparativeStats();
   const {
@@ -69,7 +49,7 @@ export const AttendanceView = () => {
   const filteredRecords = records.filter((r) => {
     if (
       filters.search &&
-      !r.employee.name.toLowerCase().includes(filters.search.toLowerCase())
+      !r.employee.fullName.toLowerCase().includes(filters.search.toLowerCase())
     )
       return false;
     if (filters.status && r.status !== filters.status) return false;

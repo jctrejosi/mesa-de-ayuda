@@ -45,10 +45,12 @@ export const RecordTypeChip = ({ type }: { type: RecordType }) => (
 );
 
 export const Avatar = ({
-  employee,
+  initials,
   size = "md",
+  avatarColor,
 }: {
-  employee: Employee;
+  avatarColor?: string;
+  initials: string;
   size?: "sm" | "md" | "lg";
 }) => {
   const sizes = {
@@ -59,9 +61,9 @@ export const Avatar = ({
   return (
     <div
       className={`${sizes[size]} rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0`}
-      style={{ backgroundColor: employee.avatarColor }}
+      style={{ backgroundColor: avatarColor || "#4F46E5" }}
     >
-      {employee.initials}
+      {initials}
     </div>
   );
 };

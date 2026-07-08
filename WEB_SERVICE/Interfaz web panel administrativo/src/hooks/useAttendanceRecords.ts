@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { attendanceService } from "../services/attendance.service";
 import type {
-  AttendanceRecord,
   AttendanceListResponse,
+  AttendanceWithRelations,
 } from "../types/attendance.types";
 
 interface UseAttendanceRecordsReturn {
-  records: AttendanceRecord[];
+  records: AttendanceWithRelations[];
   loading: boolean;
   error: string | null;
   total: number;
@@ -43,7 +43,7 @@ export function useAttendanceRecords(
   initialFilters: Filters = {},
   limit: number = 20,
 ): UseAttendanceRecordsReturn {
-  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [records, setRecords] = useState<AttendanceWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);

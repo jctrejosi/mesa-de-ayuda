@@ -1,19 +1,11 @@
 // ─── Filter Bar ───────────────────────────────────────────────────────────────
 
 import { useState } from "react";
-import { AttendanceRecord, Toast } from "../../../types";
+import { AttendanceWithRelations, Toast, Filters } from "../../../types";
 import { Search, Calendar, Download, Plus } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { DetailModal } from "./DetailModal";
 import { ManualModal } from "./ManualModal";
-
-export interface Filters {
-  search: string;
-  status: string;
-  type: string;
-  dateFrom: string;
-  dateTo: string;
-}
 
 export const FilterBar = ({
   filters,
@@ -30,9 +22,8 @@ export const FilterBar = ({
     setFilters({ ...filters, [key]: val });
 
   const [showManual, setShowManual] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(
-    null,
-  );
+  const [selectedRecord, setSelectedRecord] =
+    useState<AttendanceWithRelations | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = (message: string, type: "success" | "error") => {

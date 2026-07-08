@@ -14,7 +14,7 @@ export interface ComparativeStats {
 }
 
 export interface AttendanceRecord {
-  employee?: any;
+  employee?: Employee;
   status: string;
   type: string;
   id: number;
@@ -30,26 +30,23 @@ export interface AttendanceRecord {
   createdAt: string;
 }
 
-export interface AttendanceListResponse {
-  records: AttendanceRecord[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
-export interface AttendanceWithRelations extends AttendanceRecord {
-  employee?: {
-    id: number;
-    code: string | null;
+export interface AttendanceWithRelations {
+  id: number;
+  employee: {
+    code: string;
     fullName: string;
+    photo: string | null;
   };
-  branch?: {
-    id: number;
+  date: string; // 'YYYY-MM-DD'
+  time: string; // 'HH:mm:ss'
+  type: "ENTRY" | "EXIT" | "BREAK_START" | "BREAK_END";
+  status: "APPROVED" | "LATE" | "REJECTED";
+  distance: number | null;
+  branch: {
     name: string;
     address: string | null;
-    latitude: string | null;
-    longitude: string | null;
   };
+  createdAt: string;
 }
 
 export interface AttendanceQueryParams {
@@ -62,6 +59,13 @@ export interface AttendanceQueryParams {
   offset?: number;
   orderBy?: "createdAt" | "checkType" | "distance";
   orderDirection?: "ASC" | "DESC";
+}
+
+export interface AttendanceListResponse {
+  records: AttendanceWithRelations[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export type StatusType = "approved" | "rejected" | "late";
@@ -91,4 +95,12 @@ export interface KPICardProps {
   icon: React.ReactNode;
   color: string;
   bgColor: string;
+}
+
+export interface Filters {
+  search: string;
+  status: string;
+  type: string;
+  dateFrom: string;
+  dateTo: string;
 }
