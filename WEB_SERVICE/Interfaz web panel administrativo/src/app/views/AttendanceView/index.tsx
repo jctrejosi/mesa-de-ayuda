@@ -1,20 +1,19 @@
 import { useState } from "react";
 
-// ─── Components ────────────────────────────────────────────────────────────────────
-
+// ─── Components ──────────────────────────────────────────────────────────────
 import { Users, Clock, AlertTriangle } from "lucide-react";
 import { FilterBar } from "./FilterBar";
 import { DataTable } from "./DataTable";
 import { KPICard } from "./KpiCard";
+import { DetailModal } from "./DetailModal";
 
-// ─── Hooks ────────────────────────────────────────────────────────────────────
-
+// ─── Hooks ──────────────────────────────────────────────────────────────────
 import { useComparativeStats } from "../../../hooks/useComparativeStats";
 import { useAttendanceRecords } from "../../../hooks/useAttendanceRecords";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
+// ─── Types ──────────────────────────────────────────────────────────────────
 import { AttendanceRecord, Filters, Toast } from "../../../types";
+import { AnimatePresence } from "motion/react";
 
 export const AttendanceView = () => {
   const [filters, setFilters] = useState<Filters>({
@@ -38,6 +37,7 @@ export const AttendanceView = () => {
     total,
     refresh: recordsRefresh,
     loadMore,
+    hasMore,
     setFilters: setApiFilters,
   } = useAttendanceRecords({}, 20);
 
@@ -47,19 +47,45 @@ export const AttendanceView = () => {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   };
 
-  const filteredRecords = records.filter((r) => {
-    if (
-      filters.search &&
-      !r.employee.fullName.toLowerCase().includes(filters.search.toLowerCase())
-    )
-      return false;
-    if (filters.status && r.status !== filters.status) return false;
-    if (filters.type && r.type !== filters.type) return false;
-    return true;
-  });
+  // ✅ Cuando los filtros de UI cambian, los enviamos al backend
+  const handleApplyFilters = () => {
+    const apiFilters: any = {};
+    if (filters.search) apiFilters.search = filters.search;
+    if (filters.status) {
+      // Convertir a mayúsculas para el backend
+      const statusMap: Record<string, string> = {
+        approved: "APPROVED",
+        late: "LATE",
+        rejected: "REJECTED",
+      };
+      apiFilters.status = statusMap[filters.status] || filters.status;
+    }
+    if (filters.type) {
+      apiFilters.type = filters.type === "entry" ? "ENTRY" : "EXIT";
+    }
+    if (filters.dateFrom) apiFilters.startDate = filters.dateFrom;
+    if (filters.dateTo) apiFilters.endDate = filters.dateTo;
+
+    setApiFilters(apiFilters);
+  };
+
+  // ✅ También aplicar cuando cambie algún filtro individual (opcional, pero recomendado)
+  // Podemos llamar a handleApplyFilters en cada cambio, o dejar que el usuario presione "Enter" o un botón "Aplicar".
+  // Para mejor UX, podríamos aplicar los filtros automáticamente después de un debounce.
 
   return (
     <>
+      <AnimatePresence>
+        {selectedRecord && (
+          <DetailModal
+            key="detail"
+            record={selectedRecord}
+            onClose={() => setSelectedRecord(null)}
+          />
+        )}
+        {/* Aquí iría el modal manual si lo tienes */}
+      </AnimatePresence>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
         <KPICard
@@ -98,7 +124,7 @@ export const AttendanceView = () => {
             Historial de Asistencias
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Visualiza y gestiona todos los registros de asistencia
+            {total} registros encontrados
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -117,9 +143,11 @@ export const AttendanceView = () => {
         </div>
       </div>
 
+      {/* FilterBar - pasamos handleApplyFilters como callback */}
       <FilterBar
         filters={filters}
         setFilters={setFilters}
+        onApplyFilters={handleApplyFilters}
         onExport={() =>
           addToast(
             "Exportación iniciada. El archivo estará listo en breve.",
@@ -129,7 +157,14 @@ export const AttendanceView = () => {
         onManual={() => setShowManual(true)}
       />
 
-      <DataTable records={filteredRecords} onRowClick={setSelectedRecord} />
+      {/* DataTable con scroll infinito */}
+      <DataTable
+        records={records}
+        onRowClick={setSelectedRecord}
+        onLoadMore={loadMore}
+        hasMore={hasMore}
+        loading={recordsLoading}
+      />
     </>
   );
 };

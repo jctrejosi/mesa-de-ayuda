@@ -112,7 +112,7 @@ export function useAttendanceRecords(
     (
       newFilters: Partial<Omit<AttendanceHistoryQueryParams, "page" | "limit">>,
     ) => {
-      setFilters((prev) => ({ ...prev, ...newFilters }));
+      setFilters(newFilters);
     },
     [],
   );
