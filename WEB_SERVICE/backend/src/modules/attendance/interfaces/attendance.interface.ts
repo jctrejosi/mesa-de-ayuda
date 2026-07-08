@@ -29,3 +29,24 @@ export interface AttendanceValidationResult {
   isWithinRadius: boolean;
   message?: string;
 }
+
+export interface AttendanceHistoryRecord {
+  id: number;
+  employee: {
+    code: string | null;
+    fullName: string;
+    photo: string | null;
+  };
+  branch: {
+    name: string;
+    address: string | null;
+  };
+  checkType: 'ENTRY' | 'EXIT' | 'BREAK_START' | 'BREAK_END';
+  createdAt: Date;
+  distance: number | null;
+  latitude: string | null;
+  longitude: string | null;
+  accuracy: number | null;
+  branchAllowedRadius: number | null;
+  status: 'approved' | 'late' | 'rejected';
+}
