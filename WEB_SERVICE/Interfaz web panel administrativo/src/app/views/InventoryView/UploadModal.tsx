@@ -42,6 +42,8 @@ export const UploadInventoryModal = ({
     updated: number;
     imagesUploaded: number;
   } | null>(null);
+  const singleImageInputRef = useRef<HTMLInputElement>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +87,21 @@ export const UploadInventoryModal = ({
       newImages[i] = files[i];
     }
     setImageFiles(newImages);
+  };
+
+  const handleSingleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (!file || selectedIndex === null) return;
+
+    const newImages = [...imageFiles];
+    newImages[selectedIndex] = file;
+
+    setImageFiles(newImages);
+    setSelectedIndex(null);
+
+    // Permite volver a seleccionar el mismo archivo
+    e.target.value = "";
   };
 
   // Asignar imagen individual a un producto (desde el botón de cada fila)
@@ -184,8 +201,7 @@ export const UploadInventoryModal = ({
               Cargar inventario
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {step === "upload" &&
-                "Selecciona el archivo INVE.TXT y las imágenes"}
+              {step === "upload" && "Selecciona el archivo .TXT y las imágenes"}
               {step === "preview" &&
                 `Previsualización (${parsedItems.length} productos)`}
               {step === "saving" && "Guardando en la base de datos..."}
@@ -211,9 +227,7 @@ export const UploadInventoryModal = ({
               >
                 <FileText size={40} className="mx-auto text-slate-400 mb-3" />
                 <p className="text-sm font-medium text-slate-700">
-                  {txtFile
-                    ? txtFile.name
-                    : "Haz clic para seleccionar INVE.TXT"}
+                  {txtFile ? txtFile.name : "Haz clic para seleccionar .TXT"}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
                   Formato: Codigo|Plu|Ean|Nombre|Venta|Saldo|Imagen
@@ -272,6 +286,13 @@ export const UploadInventoryModal = ({
                   onChange={handleImagesChange}
                   className="hidden"
                 />
+                <input
+                  ref={singleImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleSingleImageChange}
+                  className="hidden"
+                />
               </div>
 
               <div className="max-h-64 overflow-y-auto border border-border rounded-lg">
@@ -327,7 +348,10 @@ export const UploadInventoryModal = ({
                               </div>
                             ) : (
                               <button
-                                onClick={() => imageInputRef.current?.click()}
+                                onClick={() => {
+                                  setSelectedIndex(idx);
+                                  singleImageInputRef.current?.click();
+                                }}
                                 className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                               >
                                 <Image size={12} /> Asignar

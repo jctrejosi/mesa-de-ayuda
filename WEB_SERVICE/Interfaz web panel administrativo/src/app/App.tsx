@@ -299,7 +299,7 @@ const Navbar = ({ title, subtitle }: { title: string; subtitle: string }) => {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [view, setView] = useState<ViewType>("attendance");
+  const [view, setView] = useState<ViewType>("sales");
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Leer vista desde la URL al montar
