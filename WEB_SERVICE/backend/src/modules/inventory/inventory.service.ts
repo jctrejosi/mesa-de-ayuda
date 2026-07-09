@@ -1,9 +1,10 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { getDb } from '../../database/drizzle';
 import { inventory, type NewInventory } from '../../database/schema';
-import { eq } from 'drizzle-orm';
+import { asc, desc, eq, or, sql } from 'drizzle-orm';
 import { createWriteStream, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { ListInventoryDto } from './dto/list-inventory.dto';
 
 export interface ParsedProduct {
   codigo: string;
@@ -29,6 +30,70 @@ export class InventoryService {
 
   private get db() {
     return getDb();
+  }
+
+  /**
+   * Listar productos con paginación, búsqueda y ordenamiento
+   */
+  async findAll(query: ListInventoryDto): Promise<{
+    items: (typeof inventory.$inferSelect)[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.max(1, Number(query.limit) || 10);
+    const offset = (page - 1) * limit;
+
+    const search = query.search?.trim();
+    const sortOrder = query.sortOrder === 'DESC' ? 'DESC' : 'ASC';
+
+    const sortColumnMap = {
+      codigo: inventory.codigo,
+      nombre: inventory.nombre,
+      precio_venta: inventory.precio_venta,
+      saldo: inventory.saldo,
+      plu: inventory.plu,
+      ean: inventory.ean,
+      createdAt: inventory.createdAt,
+    } as const;
+
+    const orderColumn =
+      sortColumnMap[query.sortBy as keyof typeof sortColumnMap] ??
+      inventory.codigo;
+
+    const whereClause = search
+      ? or(
+          sql`LOWER(${inventory.codigo}) LIKE ${`%${search.toLowerCase()}%`}`,
+          sql`LOWER(${inventory.nombre}) LIKE ${`%${search.toLowerCase()}%`}`,
+          sql`LOWER(${inventory.plu}) LIKE ${`%${search.toLowerCase()}%`}`,
+          sql`LOWER(${inventory.ean}) LIKE ${`%${search.toLowerCase()}%`}`,
+        )
+      : undefined;
+
+    const items = await this.db
+      .select()
+      .from(inventory)
+      .where(whereClause)
+      .orderBy(sortOrder === 'DESC' ? desc(orderColumn) : asc(orderColumn))
+      .limit(limit)
+      .offset(offset);
+
+    const [{ total }] = await this.db
+      .select({
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(inventory)
+      .where(whereClause);
+
+    return {
+      items,
+      total: Number(total),
+      page,
+      limit,
+      totalPages: Math.ceil(Number(total) / limit),
+    };
   }
 
   /**
@@ -97,7 +162,7 @@ export class InventoryService {
         plu: product.plu || null,
         ean: product.ean || null,
         nombre: product.nombre,
-        precio_venta: String(product.precio_venta),
+        precio_venta: product.precio_venta,
         saldo: product.saldo,
         imagen: product.imagen || null,
       };

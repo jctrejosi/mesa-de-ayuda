@@ -23,8 +23,12 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
-import { ParseInventoryResponseDto } from './dto/inventory-response.dto';
+import {
+  PaginatedInventoryResponseDto,
+  ParseInventoryResponseDto,
+} from './dto/inventory-response.dto';
 import type {} from 'multer';
+import { ListInventoryDto } from './dto/list-inventory.dto';
 
 @ApiTags('inventory')
 @ApiBearerAuth()
@@ -33,6 +37,22 @@ import type {} from 'multer';
 @Roles('admin')
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
+
+  @Post('list')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Listar productos con paginación, búsqueda y ordenamiento',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Listado de productos',
+    type: PaginatedInventoryResponseDto,
+  })
+  findAll(
+    @Body() dto: ListInventoryDto,
+  ): Promise<PaginatedInventoryResponseDto> {
+    return this.inventoryService.findAll(dto);
+  }
 
   /**
    * Endpoint para previsualizar el archivo de inventario
