@@ -50,3 +50,30 @@ export interface InventoryProduct extends InventoryItem {
   imageUrl?: string;
   status?: "new" | "updated" | "unchanged";
 }
+
+// ─── Respuesta paginada del listado ──────────────────────────────────────────
+
+export interface PaginatedInventoryResponse {
+  items: InventoryItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// ─── Parámetros para listar ──────────────────────────────────────────────────
+
+export interface ListInventoryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?:
+    | "codigo"
+    | "nombre"
+    | "precio_venta"
+    | "saldo"
+    | "plu"
+    | "ean"
+    | "createdAt";
+  sortOrder?: "ASC" | "DESC";
+}

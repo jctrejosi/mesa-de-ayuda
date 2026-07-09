@@ -2,9 +2,8 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { getDb } from '../../database/drizzle';
 import { inventory, type NewInventory } from '../../database/schema';
 import { asc, desc, eq, or, sql } from 'drizzle-orm';
-import { createWriteStream, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
 import { ListInventoryDto } from './dto/list-inventory.dto';
+import { CloudinaryService } from './cloudinary.service';
 
 export interface ParsedProduct {
   codigo: string;
@@ -19,14 +18,8 @@ export interface ParsedProduct {
 @Injectable()
 export class InventoryService {
   private readonly logger = new Logger(InventoryService.name);
-  private readonly uploadDir = 'uploads/inventory';
 
-  constructor() {
-    // Asegurar que el directorio de uploads existe
-    if (!existsSync(this.uploadDir)) {
-      mkdirSync(this.uploadDir, { recursive: true });
-    }
-  }
+  constructor(private readonly cloudinaryService: CloudinaryService) {}
 
   private get db() {
     return getDb();
@@ -193,41 +186,8 @@ export class InventoryService {
   }
 
   /**
-   * Guarda una imagen en el servidor y devuelve la ruta pública
-   */
-  async saveImage(
-    file: Express.Multer.File,
-    productCodigo: string,
-  ): Promise<string> {
-    // Generar nombre único para la imagen
-    const ext = file.originalname.split('.').pop();
-    const filename = `${productCodigo}_${Date.now()}.${ext}`;
-    const filePath = join(process.cwd(), this.uploadDir, filename);
-
-    // Escribir el archivo en disco
-    return new Promise((resolve, reject) => {
-      const writeStream = createWriteStream(filePath);
-      writeStream.write(file.buffer);
-      writeStream.end();
-
-      writeStream.on('finish', () => {
-        // Devolver la ruta relativa o URL pública
-        const publicPath = `/${this.uploadDir}/${filename}`;
-        resolve(publicPath);
-      });
-
-      writeStream.on('error', (error) => {
-        reject(
-          new BadRequestException(`Error al guardar imagen: ${error.message}`),
-        );
-      });
-    });
-  }
-
-  /**
    * Guarda un conjunto de productos con sus imágenes asociadas
-   * @param products - lista de productos (cada uno con el nombre de archivo original)
-   * @param files - array de archivos subidos (en el mismo orden que los productos)
+   * Las imágenes se suben a Cloudinary y se guarda la URL
    */
   async saveWithImages(
     products: ParsedProduct[],
@@ -239,20 +199,24 @@ export class InventoryService {
       );
     }
 
-    let imagesUploaded = 0;
-
+    // Subir todas las imágenes a Cloudinary (una por una)
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
       const file = files[i];
 
-      // Guardar la imagen
-      const imagePath = await this.saveImage(file, product.codigo);
-      product.imagen = imagePath; // Reemplazar el nombre de archivo original por la ruta
-      imagesUploaded++;
+      const imageUrl = await this.cloudinaryService.uploadImage(
+        file,
+        product.codigo,
+      );
+      product.imagen = imageUrl;
     }
 
-    // Guardar los productos en la BD
+    // Guardar productos en BD (con las URLs de Cloudinary)
+    this.logger.debug('Iniciando saveProducts');
+
     const result = await this.saveProducts(products);
-    return { ...result, imagesUploaded };
+
+    this.logger.debug(result);
+    return { ...result, imagesUploaded: products.length };
   }
 }

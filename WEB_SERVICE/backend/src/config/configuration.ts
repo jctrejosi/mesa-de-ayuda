@@ -21,6 +21,12 @@ export interface MicrosoftConfig {
   tenantId: string;
 }
 
+export interface CloudinaryConfig {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+}
+
 export interface AppConfig {
   port: number;
   nodeEnv: string;
@@ -28,11 +34,17 @@ export interface AppConfig {
   jwt: JwtConfig;
   cors: CorsConfig;
   microsoft: MicrosoftConfig;
+  cloudinary: CloudinaryConfig;
 }
 
 export default registerAs('app', (): AppConfig => ({
   port: parseInt(process.env.PORT ?? '3000', 10),
   nodeEnv: process.env.NODE_ENV ?? 'development',
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+    apiKey: process.env.CLOUDINARY_API_KEY || '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET || '',
+  },
   database: {
     url: process.env.DATABASE_URL ?? '',
   },

@@ -1,6 +1,8 @@
 import api from "./api";
 import type {
   InventoryItem,
+  ListInventoryParams,
+  PaginatedInventoryResponse,
   ParseInventoryResponse,
   SaveInventoryItemDto,
   UploadInventoryResponse,
@@ -88,6 +90,38 @@ export const inventoryService = {
         headers: {
           "Content-Type": "multipart/form-data",
         },
+      },
+    );
+
+    const data = response.data;
+    return data;
+  },
+
+  /**
+   * Listar inventario con paginación, búsqueda y ordenamiento
+   * POST /inventory/list
+   * @param params - Parámetros de paginación, búsqueda y orden
+   * @returns Lista paginada de productos
+   */
+  async list(
+    params: ListInventoryParams = {},
+  ): Promise<PaginatedInventoryResponse> {
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      sortBy = "codigo",
+      sortOrder = "ASC",
+    } = params;
+
+    const response = await api.post<PaginatedInventoryResponse>(
+      "/inventory/list",
+      {
+        page,
+        limit,
+        search: search || undefined,
+        sortBy,
+        sortOrder,
       },
     );
 
