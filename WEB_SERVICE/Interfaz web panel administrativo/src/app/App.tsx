@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ClipboardList,
   Search,
@@ -80,31 +80,14 @@ const Sidebar = ({
   view: ViewType;
   setView: (v: ViewType) => void;
 }) => {
-  // Agrupamos los items
   const comercialItems = [
-    {
-      id: "sales",
-      label: "Ventas",
-      icon: BarChart2,
-    },
-    {
-      id: "inventory",
-      label: "Inventario",
-      icon: Package,
-    },
+    { id: "sales", label: "Ventas", icon: BarChart2 },
+    { id: "inventory", label: "Inventario", icon: Package },
   ];
 
   const adminItems = [
-    {
-      id: "attendance",
-      label: "Asistencia",
-      icon: ClipboardList,
-    },
-    {
-      id: "users",
-      label: "Usuarios",
-      icon: Users,
-    },
+    { id: "attendance", label: "Asistencia", icon: ClipboardList },
+    { id: "users", label: "Usuarios", icon: Users },
   ];
 
   const renderItems = (items: typeof comercialItems) =>
@@ -162,7 +145,6 @@ const Sidebar = ({
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-4">
-        {/* Grupo Comercial */}
         <div>
           <p
             className="text-[10px] font-semibold uppercase tracking-widest px-3 py-2"
@@ -172,8 +154,6 @@ const Sidebar = ({
           </p>
           <div className="space-y-0.5">{renderItems(comercialItems)}</div>
         </div>
-
-        {/* Grupo Administración */}
         <div>
           <p
             className="text-[10px] font-semibold uppercase tracking-widest px-3 py-2"
@@ -322,6 +302,27 @@ export default function App() {
   const [view, setView] = useState<ViewType>("attendance");
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // Leer vista desde la URL al montar
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get("view") as ViewType | null;
+    if (
+      viewParam &&
+      ["attendance", "users", "sales", "inventory"].includes(viewParam)
+    ) {
+      setView(viewParam);
+    }
+  }, []);
+
+  // Actualizar la URL al cambiar de vista
+  const updateView = (newView: ViewType) => {
+    setView(newView);
+    const params = new URLSearchParams(window.location.search);
+    params.set("view", newView);
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, "", newUrl);
+  };
+
   const addToast = (message: string, type: "success" | "error") => {
     const id = Math.random().toString(36).slice(2);
     setToasts((prev) => [...prev, { id, type, message }]);
@@ -353,7 +354,7 @@ export default function App() {
       className="flex h-screen overflow-hidden"
       style={{ fontFamily: "Inter, sans-serif", backgroundColor: "#F5F7FA" }}
     >
-      <Sidebar view={view} setView={setView} />
+      <Sidebar view={view} setView={updateView} />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Navbar
