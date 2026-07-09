@@ -86,8 +86,8 @@ const Sidebar = ({
   ];
 
   const adminItems = [
-    { id: "attendance", label: "Asistencia", icon: ClipboardList },
     { id: "users", label: "Usuarios", icon: Users },
+    { id: "attendance", label: "Asistencia", icon: ClipboardList },
   ];
 
   const renderItems = (items: typeof comercialItems) =>
