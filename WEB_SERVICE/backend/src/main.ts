@@ -20,7 +20,8 @@ async function bootstrap() {
     new CorrelationIdMiddleware().use.bind(new CorrelationIdMiddleware()),
   );
 
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

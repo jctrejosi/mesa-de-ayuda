@@ -21,6 +21,7 @@ import { ConfigModule as AppConfigModule } from './modules/config/config.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuditLogModule } from './modules/audit/audit-log.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { AuditLogModule } from './modules/audit/audit-log.module';
     DashboardModule,
     UsersModule,
     AuditLogModule,
+    InventoryModule,
   ],
   controllers: [AppController],
   providers: [
