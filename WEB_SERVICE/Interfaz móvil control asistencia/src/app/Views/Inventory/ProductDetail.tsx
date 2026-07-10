@@ -4,8 +4,6 @@ import {
   Box,
   Calendar,
   Tag,
-  TrendingDown,
-  TrendingUp,
   Truck,
   Warehouse,
 } from "lucide-react";
@@ -14,8 +12,9 @@ import { StockBar } from "./StockBar";
 // ─── Detail Screen ─────────────────────────────────────────────────────────────
 type ItemStatus = "available" | "low" | "out";
 
-interface InventoryItem {
-  id: number;
+// Interface que coincide con el item mapeado en InventoryScreen
+export interface InventoryItem {
+  id: string; // ahora es string (código)
   name: string;
   category: string;
   description: string;
@@ -30,85 +29,6 @@ interface InventoryItem {
   status: ItemStatus;
   image?: string;
 }
-
-interface Movement {
-  date: string;
-  type: "entrada" | "salida";
-  qty: number;
-  note: string;
-}
-
-const MOVEMENTS: Record<number, Movement[]> = {
-  1: [
-    {
-      date: "2026-07-10T10:30:00",
-      type: "entrada",
-      qty: 5,
-      note: "Reposición mensual",
-    },
-    {
-      date: "2026-07-08T09:15:00",
-      type: "salida",
-      qty: 2,
-      note: "Asignado a nuevo empleado",
-    },
-    {
-      date: "2026-07-05T14:00:00",
-      type: "salida",
-      qty: 1,
-      note: "Reemplazo por falla",
-    },
-    {
-      date: "2026-07-01T08:00:00",
-      type: "entrada",
-      qty: 10,
-      note: "Compra proveedor Q3",
-    },
-  ],
-  2: [
-    {
-      date: "2026-07-09T15:20:00",
-      type: "salida",
-      qty: 3,
-      note: "Sala de conferencias",
-    },
-    {
-      date: "2026-07-06T11:00:00",
-      type: "salida",
-      qty: 2,
-      note: "Home office empleados",
-    },
-    {
-      date: "2026-06-28T09:30:00",
-      type: "entrada",
-      qty: 8,
-      note: "Pedido DisplayPro",
-    },
-  ],
-  3: [
-    {
-      date: "2026-07-07T10:00:00",
-      type: "entrada",
-      qty: 4,
-      note: "Remodelación oficina",
-    },
-    {
-      date: "2026-07-02T16:00:00",
-      type: "salida",
-      qty: 1,
-      note: "Gerencia general",
-    },
-  ],
-  4: [
-    { date: "2026-07-08T13:00:00", type: "salida", qty: 5, note: "Área de TI" },
-    {
-      date: "2026-07-03T08:30:00",
-      type: "entrada",
-      qty: 20,
-      note: "Stock inicial",
-    },
-  ],
-};
 
 const STATUS_CONFIG = {
   available: {
@@ -152,7 +72,6 @@ export function ProductDetail({
   item: InventoryItem;
   onBack: () => void;
 }) {
-  const movements = MOVEMENTS[item.id] ?? [];
   const sc = STATUS_CONFIG[item.status];
   const stockPct = Math.min((item.quantity / item.maxStock) * 100, 100);
 
@@ -213,11 +132,9 @@ export function ProductDetail({
           </div>
           <div className="text-right">
             <p className="text-[11px] text-[#64748B] font-medium">
-              ID Producto
+              Código producto
             </p>
-            <p className="text-[14px] font-bold text-[#0F1523]">
-              #{String(item.id).padStart(4, "0")}
-            </p>
+            <p className="text-[14px] font-bold text-[#0F1523]">#{item.id}</p>
           </div>
         </div>
 
@@ -300,50 +217,14 @@ export function ProductDetail({
           </p>
         </div>
 
-        {/* Movements */}
+        {/* Movements - se muestra siempre vacío (no tenemos datos) */}
         <div className="bg-white rounded-[18px] shadow-[0_2px_12px_rgba(15,23,42,0.07)] p-4">
           <p className="text-[11px] font-bold text-[#64748B] uppercase tracking-widest mb-3">
             Movimientos recientes
           </p>
-          {movements.length === 0 ? (
-            <p className="text-[13px] text-[#94A3B8] text-center py-4">
-              Sin movimientos registrados
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {movements.map((m, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      m.type === "entrada" ? "bg-[#DCFCE7]" : "bg-[#FEE2E2]"
-                    }`}
-                  >
-                    {m.type === "entrada" ? (
-                      <TrendingUp size={14} className="text-[#16A34A]" />
-                    ) : (
-                      <TrendingDown size={14} className="text-[#DC2626]" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-[12px] font-semibold capitalize ${m.type === "entrada" ? "text-[#15803D]" : "text-[#B91C1C]"}`}
-                      >
-                        {m.type === "entrada" ? "+" : "-"}
-                        {m.qty} {item.unit}
-                      </span>
-                      <span className="text-[10px] text-[#94A3B8]">
-                        {fmtRelative(m.date)}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#64748B] truncate">
-                      {m.note}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <p className="text-[13px] text-[#94A3B8] text-center py-4">
+            Sin movimientos registrados
+          </p>
         </div>
 
         {/* Action */}

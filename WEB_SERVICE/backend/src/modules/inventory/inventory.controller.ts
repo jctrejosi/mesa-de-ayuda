@@ -34,7 +34,6 @@ import { ListInventoryDto } from './dto/list-inventory.dto';
 @ApiBearerAuth()
 @Controller('inventory')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin')
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
@@ -64,6 +63,7 @@ export class InventoryController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Previsualizar archivo de inventario (INVE.TXT)' })
   @ApiConsumes('multipart/form-data')
+  @Roles('admin')
   @ApiBody({
     schema: {
       type: 'object',
@@ -108,6 +108,7 @@ export class InventoryController {
     summary: 'Guardar productos en la base de datos (con imágenes)',
   })
   @ApiConsumes('multipart/form-data')
+  @Roles('admin')
   @ApiBody({
     description: 'Datos de productos e imágenes',
     schema: {

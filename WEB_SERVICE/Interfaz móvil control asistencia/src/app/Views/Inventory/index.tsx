@@ -1,20 +1,17 @@
 // ─── Main Inventory Screen ─────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ProductDetail } from "./ProductDetail";
 import { Package, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { ProductCard } from "./ProductCard";
-import { FilterModal } from "./FilterModal";
+import { FilterModal, type FilterState } from "./FilterModal";
+import { useInventory } from "../../../hook/useInventory";
+import type { InventoryItem as BackendItem } from "../../../services/inventory.service";
 
 type InvView = "list" | "detail";
 type ItemStatus = "available" | "low" | "out";
 
-interface FilterState {
-  categories: string[];
-  statuses: ItemStatus[];
-  locations: string[];
-}
-
+// Configuración de estados para mostrar en badges y chips
 const STATUS_CONFIG = {
   available: {
     label: "Disponible",
@@ -36,277 +33,116 @@ const STATUS_CONFIG = {
   },
 };
 
-interface InventoryItem {
-  id: number;
-  name: string;
-  category: string;
-  description: string;
-  quantity: number;
-  minStock: number;
-  maxStock: number;
-  unit: string;
-  location: string;
-  supplier: string;
-  price: number;
-  lastUpdated: string;
-  status: ItemStatus;
-  image?: string;
-}
+// Umbral para considerar bajo stock (si saldo < 5 -> low)
+const LOW_STOCK_THRESHOLD = 5;
 
-const INVENTORY: InventoryItem[] = [
-  {
-    id: 1,
-    name: "Laptop Dell XPS 13",
-    category: "Electrónicos",
-    description:
-      "Laptop de alta gama con procesador Intel Core i7 de 12.ª generación, 16 GB RAM DDR5, SSD 512 GB NVMe. Ideal para trabajo de campo y presentaciones.",
-    quantity: 45,
-    minStock: 10,
-    maxStock: 60,
+// Mapear estado según saldo
+const getStatus = (saldo: number): ItemStatus => {
+  if (saldo <= 0) return "out";
+  if (saldo < LOW_STOCK_THRESHOLD) return "low";
+  return "available";
+};
+
+// Mapear un item del backend al formato que espera ProductCard / ProductDetail
+const mapBackendItem = (backendItem: BackendItem) => {
+  const status = getStatus(backendItem.saldo);
+  return {
+    id: backendItem.codigo, // usamos codigo como id (string)
+    name: backendItem.nombre,
+    category: "General", // no tenemos categoría, asignamos un valor por defecto
+    description: `Código: ${backendItem.codigo} | PLU: ${backendItem.plu || "N/A"} | EAN: ${backendItem.ean || "N/A"}`,
+    quantity: backendItem.saldo,
+    minStock: LOW_STOCK_THRESHOLD,
+    maxStock: backendItem.saldo * 2 || 100,
     unit: "unidades",
-    location: "Bodega A - Estante 3",
-    supplier: "TechSupplier S.A.",
-    price: 850.0,
-    lastUpdated: "2026-07-10T10:30:00",
-    status: "available",
-    image:
-      "https://images.unsplash.com/photo-1511385348-a52b4a160dc2?w=600&h=400&fit=crop&auto=format&q=80",
-  },
-  {
-    id: 2,
-    name: 'Monitor Samsung 27"',
-    category: "Electrónicos",
-    description:
-      "Monitor curvo 27 pulgadas 4K UHD, panel VA, 144 Hz, HDR10. Conectividad HDMI 2.1 y DisplayPort 1.4. Ideal para diseño y productividad.",
-    quantity: 8,
-    minStock: 20,
-    maxStock: 50,
-    unit: "unidades",
-    location: "Bodega B - Estante 1",
-    supplier: "DisplayPro",
-    price: 320.0,
-    lastUpdated: "2026-07-09T15:20:00",
-    status: "low",
-    image:
-      "https://images.unsplash.com/photo-1547658718-1cdaa0852790?w=600&h=400&fit=crop&auto=format&q=80",
-  },
-  {
-    id: 3,
-    name: "Silla Ergonómica Herman Miller",
-    category: "Mobiliario",
-    description:
-      "Silla ergonómica de alta gama con soporte lumbar ajustable, apoyabrazos 4D, malla transpirable. Certificada para uso intensivo de 8+ horas.",
-    quantity: 22,
-    minStock: 5,
-    maxStock: 30,
-    unit: "unidades",
-    location: "Bodega C - Piso 1",
-    supplier: "OfficeWorld",
-    price: 1200.0,
-    lastUpdated: "2026-07-07T08:00:00",
-    status: "available",
-    image:
-      "https://images.unsplash.com/photo-1688578735427-994ecdea3ea4?w=600&h=400&fit=crop&auto=format&q=80",
-  },
-  {
-    id: 4,
-    name: "Teclado Mecánico Keychron K2",
-    category: "Electrónicos",
-    description:
-      "Teclado mecánico TKL inalámbrico, switches Red, retroiluminación RGB, compatible con Mac y Windows. Batería 4000 mAh.",
-    quantity: 30,
-    minStock: 8,
-    maxStock: 40,
-    unit: "unidades",
-    location: "Bodega A - Estante 5",
-    supplier: "TechSupplier S.A.",
-    price: 95.0,
-    lastUpdated: "2026-07-08T13:00:00",
-    status: "available",
-  },
-  {
-    id: 5,
-    name: "Mouse Logitech MX Master 3",
-    category: "Electrónicos",
-    description:
-      "Mouse inalámbrico de alta precisión 8K DPI, rueda MagSpeed electromagnética, conectividad multi-dispositivo Bluetooth.",
-    quantity: 6,
-    minStock: 10,
-    maxStock: 30,
-    unit: "unidades",
-    location: "Bodega A - Estante 5",
-    supplier: "LogiParts",
-    price: 99.0,
-    lastUpdated: "2026-07-06T11:30:00",
-    status: "low",
-  },
-  {
-    id: 6,
-    name: "Papel A4 80g/m² (resma 500h)",
-    category: "Papelería",
-    description:
-      "Papel blanco tamaño A4, gramaje 80 g/m², apto para impresoras láser e inkjet. Certificación FSC.",
-    quantity: 12,
-    minStock: 20,
-    maxStock: 100,
-    unit: "resmas",
-    location: "Bodega D - Anaquel 2",
-    supplier: "PaperMax",
-    price: 6.5,
-    lastUpdated: "2026-07-05T09:00:00",
-    status: "low",
-  },
-  {
-    id: 7,
-    name: "Tóner HP LaserJet 26A",
-    category: "Consumibles",
-    description:
-      "Cartucho de tóner negro original para impresoras HP LaserJet M402 y M426. Rendimiento aproximado 3100 páginas.",
-    quantity: 0,
-    minStock: 5,
-    maxStock: 20,
-    unit: "unidades",
-    location: "Bodega D - Anaquel 4",
-    supplier: "HPStore",
-    price: 45.0,
-    lastUpdated: "2026-07-03T16:00:00",
-    status: "out",
-  },
-  {
-    id: 8,
-    name: "Webcam Logitech C920 HD Pro",
-    category: "Electrónicos",
-    description:
-      "Webcam Full HD 1080p/30fps, micrófono estéreo integrado, compatible con Zoom, Teams y Meet. Clip universal.",
-    quantity: 18,
-    minStock: 5,
-    maxStock: 25,
-    unit: "unidades",
-    location: "Bodega A - Estante 4",
-    supplier: "LogiParts",
-    price: 79.0,
-    lastUpdated: "2026-07-10T08:00:00",
-    status: "available",
-  },
-  {
-    id: 9,
-    name: "Audífonos Sony WH-1000XM5",
-    category: "Electrónicos",
-    description:
-      "Audífonos inalámbricos con cancelación de ruido líder en la industria, 30 h de batería, carga rápida USB-C.",
-    quantity: 11,
-    minStock: 3,
-    maxStock: 15,
-    unit: "unidades",
-    location: "Bodega A - Estante 6",
-    supplier: "SonyDist",
-    price: 349.0,
-    lastUpdated: "2026-07-09T12:00:00",
-    status: "available",
-  },
-  {
-    id: 10,
-    name: "Desinfectante en Spray 1L",
-    category: "Limpieza",
-    description:
-      "Solución desinfectante multiusos al 70% alcohol isopropílico. Apto para superficies electrónicas. Fragancia neutra.",
-    quantity: 4,
-    minStock: 15,
-    maxStock: 50,
-    unit: "litros",
-    location: "Bodega E - Estante 1",
-    supplier: "CleanPro",
-    price: 3.8,
-    lastUpdated: "2026-07-04T10:00:00",
-    status: "low",
-  },
-  {
-    id: 11,
-    name: "Cable HDMI 2.1 (2m)",
-    category: "Cables",
-    description:
-      "Cable HDMI 2.1 premium certificado, soporta 8K@60Hz y 4K@120Hz, trenzado de nylon, conectores dorados.",
-    quantity: 0,
-    minStock: 10,
-    maxStock: 30,
-    unit: "unidades",
-    location: "Bodega A - Estante 2",
-    supplier: "CableTech",
-    price: 18.0,
-    lastUpdated: "2026-07-01T14:30:00",
-    status: "out",
-  },
-  {
-    id: 12,
-    name: 'MacBook Pro 14" M3 Pro',
-    category: "Electrónicos",
-    description:
-      'Laptop Apple con chip M3 Pro, 18 GB memoria unificada, SSD 512 GB. Pantalla Liquid Retina XDR 14.2".',
-    quantity: 7,
-    minStock: 3,
-    maxStock: 12,
-    unit: "unidades",
-    location: "Bodega A - Estante 1",
-    supplier: "AppleDist",
-    price: 1999.0,
-    lastUpdated: "2026-07-10T07:30:00",
-    status: "available",
-    image:
-      "https://images.unsplash.com/photo-1487017159836-4e23ece2e4cf?w=600&h=400&fit=crop&auto=format&q=80",
-  },
-];
+    location: "Bodega principal",
+    supplier: "Proveedor",
+    price: backendItem.precio_venta,
+    lastUpdated: backendItem.updatedAt || new Date().toISOString(),
+    status,
+    image: backendItem.imagen || undefined,
+  };
+};
 
 export function InventoryScreen() {
   const [invView, setInvView] = useState<InvView>("list");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ReturnType<
+    typeof mapBackendItem
+  > | null>(null);
   const [query, setQuery] = useState("");
+
+  // Estado de filtros unificado (compatible con FilterModal)
   const [filters, setFilters] = useState<FilterState>({
-    categories: [],
     statuses: [],
+    categories: [],
     locations: [],
   });
+
   const [showFilters, setShowFilters] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  // Simulate initial load
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1200);
-    return () => clearTimeout(t);
-  }, []);
+  // Hook para obtener inventario del backend
+  const {
+    items: backendItems,
+    loading,
+    error,
+    pagination,
+    searchItems,
+    refresh,
+    loadMore,
+    hasMore,
+  } = useInventory({ limit: 20 });
 
-  const filtered = useMemo(() => {
-    let items = INVENTORY;
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      items = items.filter(
-        (i) =>
-          i.name.toLowerCase().includes(q) ||
-          i.description.toLowerCase().includes(q) ||
-          i.category.toLowerCase().includes(q),
-      );
+  // Mapear los items del backend al formato del frontend
+  const mappedItems = useMemo(
+    () => backendItems.map(mapBackendItem),
+    [backendItems],
+  );
+
+  // Aplicar filtros locales: solo por estado (categorías y ubicaciones no se usan)
+  const filteredItems = useMemo(() => {
+    let result = mappedItems;
+    if (filters.statuses.length > 0) {
+      result = result.filter((item) => filters.statuses.includes(item.status));
     }
-    if (filters.categories.length)
-      items = items.filter((i) => filters.categories.includes(i.category));
-    if (filters.statuses.length)
-      items = items.filter((i) => filters.statuses.includes(i.status));
-    if (filters.locations.length)
-      items = items.filter((i) =>
-        filters.locations.some((l) => i.location.startsWith(l)),
-      );
-    return items;
-  }, [query, filters]);
+    return result;
+  }, [mappedItems, filters]);
+
+  // Estadísticas calculadas sobre los items mapeados
+  const stats = useMemo(() => {
+    const total = mappedItems.length;
+    const low = mappedItems.filter((i) => i.status === "low").length;
+    const out = mappedItems.filter((i) => i.status === "out").length;
+    return { total, low, out };
+  }, [mappedItems]);
 
   const activeFilters =
-    filters.categories.length +
     filters.statuses.length +
-    filters.locations.length;
-  const selectedItem = INVENTORY.find((i) => i.id === selectedId);
-  const stats = {
-    total: INVENTORY.length,
-    low: INVENTORY.filter((i) => i.status === "low").length,
-    out: INVENTORY.filter((i) => i.status === "out").length,
+    (filters.categories?.length || 0) +
+    (filters.locations?.length || 0);
+
+  // Manejador de búsqueda
+  const handleSearch = () => {
+    if (query.trim()) {
+      searchItems(query.trim());
+    } else {
+      refresh();
+    }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
+  // Limpiar búsqueda y filtros
+  const clearAll = () => {
+    setQuery("");
+    setFilters({ statuses: [], categories: [], locations: [] });
+    refresh();
+  };
+
+  // Si estamos en vista de detalle y hay item seleccionado
   if (invView === "detail" && selectedItem) {
     return (
       <ProductDetail item={selectedItem} onBack={() => setInvView("list")} />
@@ -326,7 +162,7 @@ export function InventoryScreen() {
             </p>
           </div>
           <button
-            onClick={() => setLoading(true)}
+            onClick={refresh}
             className="w-9 h-9 rounded-full bg-white shadow-sm border border-black/[0.06] flex items-center justify-center text-[#475569]"
           >
             <RefreshCw size={15} />
@@ -375,7 +211,8 @@ export function InventoryScreen() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar producto, categoría…"
+              onKeyDown={handleKeyDown}
+              placeholder="Buscar por código, nombre, PLU o EAN…"
               className="flex-1 bg-transparent text-[13px] text-[#0F1523] placeholder:text-[#CBD5E1] outline-none"
             />
             {query && (
@@ -401,21 +238,9 @@ export function InventoryScreen() {
           </button>
         </div>
 
-        {/* Active filter chips */}
-        {activeFilters > 0 && (
+        {/* Active filter chips (solo estado, porque no tenemos categorías ni ubicaciones) */}
+        {filters.statuses.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
-            {filters.categories.map((c) => (
-              <ActiveFilterChip
-                key={c}
-                label={c}
-                onRemove={() =>
-                  setFilters((p) => ({
-                    ...p,
-                    categories: p.categories.filter((x) => x !== c),
-                  }))
-                }
-              />
-            ))}
             {filters.statuses.map((s) => (
               <ActiveFilterChip
                 key={s}
@@ -424,18 +249,6 @@ export function InventoryScreen() {
                   setFilters((p) => ({
                     ...p,
                     statuses: p.statuses.filter((x) => x !== s),
-                  }))
-                }
-              />
-            ))}
-            {filters.locations.map((l) => (
-              <ActiveFilterChip
-                key={l}
-                label={l}
-                onRemove={() =>
-                  setFilters((p) => ({
-                    ...p,
-                    locations: p.locations.filter((x) => x !== l),
                   }))
                 }
               />
@@ -449,46 +262,75 @@ export function InventoryScreen() {
         className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
         style={{ scrollbarWidth: "none" }}
       >
-        {loading ? (
+        {loading && mappedItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-4">
             <div className="w-12 h-12 rounded-full border-[3px] border-[#2563EB] border-t-transparent animate-spin" />
             <p className="text-[13px] text-[#64748B] font-medium">
               Cargando inventario…
             </p>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+            <div className="w-16 h-16 rounded-full bg-[#FEE2E2] flex items-center justify-center">
+              <Package size={28} className="text-[#DC2626]" />
+            </div>
+            <p className="font-semibold text-[#DC2626]">Error al cargar</p>
+            <p className="text-[13px] text-[#64748B]">{error}</p>
+            <button
+              onClick={refresh}
+              className="text-[13px] font-semibold text-[#2563EB]"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : filteredItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
             <div className="w-16 h-16 rounded-full bg-[#F1F5F9] flex items-center justify-center">
               <Package size={28} className="text-[#94A3B8]" strokeWidth={1.5} />
             </div>
             <p className="font-semibold text-[#0F1523]">Sin resultados</p>
             <p className="text-[13px] text-[#64748B]">
-              Intenta con otros términos o ajusta los filtros.
+              {query
+                ? "No se encontraron productos con esa búsqueda."
+                : "No hay productos disponibles."}
             </p>
-            <button
-              onClick={() => {
-                setQuery("");
-                setFilters({ categories: [], statuses: [], locations: [] });
-              }}
-              className="text-[13px] font-semibold text-[#2563EB]"
-            >
-              Limpiar búsqueda
-            </button>
+            {(query || activeFilters > 0) && (
+              <button
+                onClick={clearAll}
+                className="text-[13px] font-semibold text-[#2563EB]"
+              >
+                Limpiar filtros
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3 pt-1">
-            {filtered.map((item) => (
+            {filteredItems.map((item) => (
               <ProductCard
                 key={item.id}
                 item={item}
                 onTap={() => {
-                  setSelectedId(item.id);
+                  setSelectedItem(item);
                   setInvView("detail");
                 }}
               />
             ))}
+            {/* Cargar más */}
+            {hasMore && (
+              <button
+                onClick={loadMore}
+                disabled={loading}
+                className="w-full py-3 bg-white rounded-[16px] border border-[#E2E8F0] text-[#64748B] text-sm font-medium hover:bg-[#F8FAFC] transition-colors flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <div className="w-4 h-4 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  "Cargar más productos"
+                )}
+              </button>
+            )}
             <p className="text-center text-[11px] text-[#94A3B8] pt-2">
-              {filtered.length} de {INVENTORY.length} productos
+              Mostrando {filteredItems.length} de {pagination.total} productos
             </p>
           </div>
         )}
@@ -499,12 +341,15 @@ export function InventoryScreen() {
           filters={filters}
           onChange={setFilters}
           onClose={() => setShowFilters(false)}
+          categoriesOptions={[]} // no tenemos categorías
+          locationsOptions={[]} // no tenemos ubicaciones
         />
       )}
     </div>
   );
 }
 
+// Componente auxiliar para mostrar chips de filtro activos
 function ActiveFilterChip({
   label,
   onRemove,

@@ -1,13 +1,17 @@
 import { AlertTriangle, Box, Warehouse } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 import { StockBar } from "./StockBar";
+
 const fmtCurrency = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "USD" }).format(
     n,
   );
+
 type ItemStatus = "available" | "low" | "out";
-interface InventoryItem {
-  id: number;
+
+// Interfaz unificada (id string)
+export interface InventoryItem {
+  id: string;
   name: string;
   category: string;
   description: string;

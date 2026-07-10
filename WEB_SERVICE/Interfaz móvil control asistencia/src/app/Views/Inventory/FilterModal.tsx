@@ -2,230 +2,6 @@ import { Filter, X } from "lucide-react";
 import { useState } from "react";
 import { FilterChip } from "./FilterChip";
 
-interface InventoryItem {
-  id: number;
-  name: string;
-  category: string;
-  description: string;
-  quantity: number;
-  minStock: number;
-  maxStock: number;
-  unit: string;
-  location: string;
-  supplier: string;
-  price: number;
-  lastUpdated: string;
-  status: ItemStatus;
-  image?: string;
-}
-
-const INVENTORY: InventoryItem[] = [
-  {
-    id: 1,
-    name: "Laptop Dell XPS 13",
-    category: "Electrónicos",
-    description:
-      "Laptop de alta gama con procesador Intel Core i7 de 12.ª generación, 16 GB RAM DDR5, SSD 512 GB NVMe. Ideal para trabajo de campo y presentaciones.",
-    quantity: 45,
-    minStock: 10,
-    maxStock: 60,
-    unit: "unidades",
-    location: "Bodega A - Estante 3",
-    supplier: "TechSupplier S.A.",
-    price: 850.0,
-    lastUpdated: "2026-07-10T10:30:00",
-    status: "available",
-    image:
-      "https://images.unsplash.com/photo-1511385348-a52b4a160dc2?w=600&h=400&fit=crop&auto=format&q=80",
-  },
-  {
-    id: 2,
-    name: 'Monitor Samsung 27"',
-    category: "Electrónicos",
-    description:
-      "Monitor curvo 27 pulgadas 4K UHD, panel VA, 144 Hz, HDR10. Conectividad HDMI 2.1 y DisplayPort 1.4. Ideal para diseño y productividad.",
-    quantity: 8,
-    minStock: 20,
-    maxStock: 50,
-    unit: "unidades",
-    location: "Bodega B - Estante 1",
-    supplier: "DisplayPro",
-    price: 320.0,
-    lastUpdated: "2026-07-09T15:20:00",
-    status: "low",
-    image:
-      "https://images.unsplash.com/photo-1547658718-1cdaa0852790?w=600&h=400&fit=crop&auto=format&q=80",
-  },
-  {
-    id: 3,
-    name: "Silla Ergonómica Herman Miller",
-    category: "Mobiliario",
-    description:
-      "Silla ergonómica de alta gama con soporte lumbar ajustable, apoyabrazos 4D, malla transpirable. Certificada para uso intensivo de 8+ horas.",
-    quantity: 22,
-    minStock: 5,
-    maxStock: 30,
-    unit: "unidades",
-    location: "Bodega C - Piso 1",
-    supplier: "OfficeWorld",
-    price: 1200.0,
-    lastUpdated: "2026-07-07T08:00:00",
-    status: "available",
-    image:
-      "https://images.unsplash.com/photo-1688578735427-994ecdea3ea4?w=600&h=400&fit=crop&auto=format&q=80",
-  },
-  {
-    id: 4,
-    name: "Teclado Mecánico Keychron K2",
-    category: "Electrónicos",
-    description:
-      "Teclado mecánico TKL inalámbrico, switches Red, retroiluminación RGB, compatible con Mac y Windows. Batería 4000 mAh.",
-    quantity: 30,
-    minStock: 8,
-    maxStock: 40,
-    unit: "unidades",
-    location: "Bodega A - Estante 5",
-    supplier: "TechSupplier S.A.",
-    price: 95.0,
-    lastUpdated: "2026-07-08T13:00:00",
-    status: "available",
-  },
-  {
-    id: 5,
-    name: "Mouse Logitech MX Master 3",
-    category: "Electrónicos",
-    description:
-      "Mouse inalámbrico de alta precisión 8K DPI, rueda MagSpeed electromagnética, conectividad multi-dispositivo Bluetooth.",
-    quantity: 6,
-    minStock: 10,
-    maxStock: 30,
-    unit: "unidades",
-    location: "Bodega A - Estante 5",
-    supplier: "LogiParts",
-    price: 99.0,
-    lastUpdated: "2026-07-06T11:30:00",
-    status: "low",
-  },
-  {
-    id: 6,
-    name: "Papel A4 80g/m² (resma 500h)",
-    category: "Papelería",
-    description:
-      "Papel blanco tamaño A4, gramaje 80 g/m², apto para impresoras láser e inkjet. Certificación FSC.",
-    quantity: 12,
-    minStock: 20,
-    maxStock: 100,
-    unit: "resmas",
-    location: "Bodega D - Anaquel 2",
-    supplier: "PaperMax",
-    price: 6.5,
-    lastUpdated: "2026-07-05T09:00:00",
-    status: "low",
-  },
-  {
-    id: 7,
-    name: "Tóner HP LaserJet 26A",
-    category: "Consumibles",
-    description:
-      "Cartucho de tóner negro original para impresoras HP LaserJet M402 y M426. Rendimiento aproximado 3100 páginas.",
-    quantity: 0,
-    minStock: 5,
-    maxStock: 20,
-    unit: "unidades",
-    location: "Bodega D - Anaquel 4",
-    supplier: "HPStore",
-    price: 45.0,
-    lastUpdated: "2026-07-03T16:00:00",
-    status: "out",
-  },
-  {
-    id: 8,
-    name: "Webcam Logitech C920 HD Pro",
-    category: "Electrónicos",
-    description:
-      "Webcam Full HD 1080p/30fps, micrófono estéreo integrado, compatible con Zoom, Teams y Meet. Clip universal.",
-    quantity: 18,
-    minStock: 5,
-    maxStock: 25,
-    unit: "unidades",
-    location: "Bodega A - Estante 4",
-    supplier: "LogiParts",
-    price: 79.0,
-    lastUpdated: "2026-07-10T08:00:00",
-    status: "available",
-  },
-  {
-    id: 9,
-    name: "Audífonos Sony WH-1000XM5",
-    category: "Electrónicos",
-    description:
-      "Audífonos inalámbricos con cancelación de ruido líder en la industria, 30 h de batería, carga rápida USB-C.",
-    quantity: 11,
-    minStock: 3,
-    maxStock: 15,
-    unit: "unidades",
-    location: "Bodega A - Estante 6",
-    supplier: "SonyDist",
-    price: 349.0,
-    lastUpdated: "2026-07-09T12:00:00",
-    status: "available",
-  },
-  {
-    id: 10,
-    name: "Desinfectante en Spray 1L",
-    category: "Limpieza",
-    description:
-      "Solución desinfectante multiusos al 70% alcohol isopropílico. Apto para superficies electrónicas. Fragancia neutra.",
-    quantity: 4,
-    minStock: 15,
-    maxStock: 50,
-    unit: "litros",
-    location: "Bodega E - Estante 1",
-    supplier: "CleanPro",
-    price: 3.8,
-    lastUpdated: "2026-07-04T10:00:00",
-    status: "low",
-  },
-  {
-    id: 11,
-    name: "Cable HDMI 2.1 (2m)",
-    category: "Cables",
-    description:
-      "Cable HDMI 2.1 premium certificado, soporta 8K@60Hz y 4K@120Hz, trenzado de nylon, conectores dorados.",
-    quantity: 0,
-    minStock: 10,
-    maxStock: 30,
-    unit: "unidades",
-    location: "Bodega A - Estante 2",
-    supplier: "CableTech",
-    price: 18.0,
-    lastUpdated: "2026-07-01T14:30:00",
-    status: "out",
-  },
-  {
-    id: 12,
-    name: 'MacBook Pro 14" M3 Pro',
-    category: "Electrónicos",
-    description:
-      'Laptop Apple con chip M3 Pro, 18 GB memoria unificada, SSD 512 GB. Pantalla Liquid Retina XDR 14.2".',
-    quantity: 7,
-    minStock: 3,
-    maxStock: 12,
-    unit: "unidades",
-    location: "Bodega A - Estante 1",
-    supplier: "AppleDist",
-    price: 1999.0,
-    lastUpdated: "2026-07-10T07:30:00",
-    status: "available",
-    image:
-      "https://images.unsplash.com/photo-1487017159836-4e23ece2e4cf?w=600&h=400&fit=crop&auto=format&q=80",
-  },
-];
-
-const LOCATIONS = [
-  ...new Set(INVENTORY.map((i) => i.location.split(" - ")[0])),
-];
-
 // ─── Status helpers ────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
@@ -249,8 +25,6 @@ const STATUS_CONFIG = {
   },
 };
 
-const CATEGORIES = [...new Set(INVENTORY.map((i) => i.category))];
-
 function FilterSection({
   label,
   children,
@@ -270,30 +44,43 @@ function FilterSection({
 
 type ItemStatus = "available" | "low" | "out";
 
-interface FilterState {
-  categories: string[];
+// Estado de filtros unificado: siempre tiene statuses, y opcionalmente categories y locations
+export interface FilterState {
   statuses: ItemStatus[];
-  locations: string[];
+  categories?: string[];
+  locations?: string[];
+}
+
+interface FilterModalProps {
+  filters: FilterState;
+  onChange: (f: FilterState) => void;
+  onClose: () => void;
+  categoriesOptions?: string[]; // opciones para categorías (si se pasan, se muestra la sección)
+  locationsOptions?: string[]; // opciones para ubicaciones (si se pasan, se muestra la sección)
 }
 
 export function FilterModal({
   filters,
   onChange,
   onClose,
-}: {
-  filters: FilterState;
-  onChange: (f: FilterState) => void;
-  onClose: () => void;
-}) {
-  const [local, setLocal] = useState<FilterState>(filters);
+  categoriesOptions = [],
+  locationsOptions = [],
+}: FilterModalProps) {
+  // Inicializar local con los valores actuales, asegurando que existan categories y locations
+  const [local, setLocal] = useState<FilterState>({
+    statuses: filters.statuses,
+    categories: filters.categories || [],
+    locations: filters.locations || [],
+  });
 
   const toggleCat = (c: string) =>
     setLocal((p) => ({
       ...p,
-      categories: p.categories.includes(c)
-        ? p.categories.filter((x) => x !== c)
-        : [...p.categories, c],
+      categories: (p.categories || []).includes(c)
+        ? (p.categories || []).filter((x) => x !== c)
+        : [...(p.categories || []), c],
     }));
+
   const toggleStatus = (s: ItemStatus) =>
     setLocal((p) => ({
       ...p,
@@ -301,16 +88,19 @@ export function FilterModal({
         ? p.statuses.filter((x) => x !== s)
         : [...p.statuses, s],
     }));
+
   const toggleLoc = (l: string) =>
     setLocal((p) => ({
       ...p,
-      locations: p.locations.includes(l)
-        ? p.locations.filter((x) => x !== l)
-        : [...p.locations, l],
+      locations: (p.locations || []).includes(l)
+        ? (p.locations || []).filter((x) => x !== l)
+        : [...(p.locations || []), l],
     }));
 
   const activeCount =
-    local.categories.length + local.statuses.length + local.locations.length;
+    (local.categories || []).length +
+    local.statuses.length +
+    (local.locations || []).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
@@ -330,7 +120,7 @@ export function FilterModal({
             {activeCount > 0 && (
               <button
                 onClick={() =>
-                  setLocal({ categories: [], statuses: [], locations: [] })
+                  setLocal({ statuses: [], categories: [], locations: [] })
                 }
                 className="text-[12px] text-[#2563EB] font-semibold"
               >
@@ -350,21 +140,23 @@ export function FilterModal({
           className="px-5 pb-6 space-y-5 max-h-[70vh] overflow-y-auto"
           style={{ scrollbarWidth: "none" }}
         >
-          {/* Categories */}
-          <FilterSection label="Categoría">
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((c) => (
-                <FilterChip
-                  key={c}
-                  label={c}
-                  active={local.categories.includes(c)}
-                  onToggle={() => toggleCat(c)}
-                />
-              ))}
-            </div>
-          </FilterSection>
+          {/* Categories - solo si hay opciones */}
+          {categoriesOptions.length > 0 && (
+            <FilterSection label="Categoría">
+              <div className="flex flex-wrap gap-2">
+                {categoriesOptions.map((c) => (
+                  <FilterChip
+                    key={c}
+                    label={c}
+                    active={(local.categories || []).includes(c)}
+                    onToggle={() => toggleCat(c)}
+                  />
+                ))}
+              </div>
+            </FilterSection>
+          )}
 
-          {/* Status */}
+          {/* Status - siempre visible */}
           <FilterSection label="Estado">
             <div className="flex gap-2">
               {(["available", "low", "out"] as ItemStatus[]).map((s) => (
@@ -378,19 +170,21 @@ export function FilterModal({
             </div>
           </FilterSection>
 
-          {/* Location */}
-          <FilterSection label="Bodega">
-            <div className="flex flex-wrap gap-2">
-              {LOCATIONS.map((l) => (
-                <FilterChip
-                  key={l}
-                  label={l}
-                  active={local.locations.includes(l)}
-                  onToggle={() => toggleLoc(l)}
-                />
-              ))}
-            </div>
-          </FilterSection>
+          {/* Location - solo si hay opciones */}
+          {locationsOptions.length > 0 && (
+            <FilterSection label="Bodega">
+              <div className="flex flex-wrap gap-2">
+                {locationsOptions.map((l) => (
+                  <FilterChip
+                    key={l}
+                    label={l}
+                    active={(local.locations || []).includes(l)}
+                    onToggle={() => toggleLoc(l)}
+                  />
+                ))}
+              </div>
+            </FilterSection>
+          )}
         </div>
 
         <div className="px-5 pb-8 pt-2 border-t border-[#F1F5F9]">
