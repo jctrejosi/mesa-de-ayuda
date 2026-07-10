@@ -2,10 +2,10 @@ import { Loader2 } from "lucide-react";
 import { AuthProvider, useAuth } from "../contexts/auth.context";
 import { LoginScreen } from "./Views/Login";
 import { AttendanceScreen } from "./Views/Attendance";
-import { BottomNav } from "./BottomNav";
+import { InventoryScreen } from "./Views/Inventory";
 import { useState } from "react";
 
-type NavTab = "asistencia" | "historial" | "perfil";
+type NavTab = "asistencia" | "historial" | "inventario" | "perfil";
 
 const AppContent = () => {
   const { isAuthenticated, isLoading, user, isAdmin, isEmployee } = useAuth();
@@ -61,19 +61,41 @@ const AppContent = () => {
     );
   }
 
-  // Empleado o manager → AttendanceScreen
+  // Función para navegar al inventario desde el modal de asistencia
+  const handleModalContinue = () => {
+    console.log("📱 Navegando a inventario desde asistencia");
+    setNavTab("inventario");
+  };
+
+  // Empleado o manager → mostrar las pantallas según navTab
   return (
     <div
       className="min-h-screen"
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
     >
       <div className="min-h-screen bg-[#F5F7FA] flex items-start justify-center">
-        <AttendanceScreen />
-        {/*<BottomNav active={navTab} onSelect={setNavTab} /> */}
+        {/* Contenido según la pestaña activa */}
+        {navTab === "asistencia" && (
+          <AttendanceScreen handleModalContinue={handleModalContinue} />
+        )}
+
+        {navTab === "inventario" && <InventoryScreen />}
+        {navTab === "historial" && (
+          <div className="w-full max-w-[430px] min-h-screen flex items-center justify-center">
+            <p className="text-[#64748B]">Pantalla de Historial</p>
+          </div>
+        )}
+
+        {navTab === "perfil" && (
+          <div className="w-full max-w-[430px] min-h-screen flex items-center justify-center">
+            <p className="text-[#64748B]">Pantalla de Perfil</p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT APP
 // ═══════════════════════════════════════════════════════════════════════════════

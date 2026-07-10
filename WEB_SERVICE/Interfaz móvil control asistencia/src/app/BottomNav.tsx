@@ -1,29 +1,5 @@
-import {
-  MapPin,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  LogIn,
-  LogOut,
-  Info,
-  User,
-  History,
-  Home,
-  X,
-  Signal,
-  ChevronRight,
-  Shield,
-  Eye,
-  EyeOff,
-  Mail,
-  Lock,
-  Loader2,
-  Building2,
-  LayoutGrid,
-  ChevronDown,
-  Star,
-} from "lucide-react";
-type NavTab = "asistencia" | "historial" | "perfil";
+import { User, History, Home } from "lucide-react";
+type NavTab = "asistencia" | "historial" | "inventario" | "perfil";
 export function BottomNav({
   active,
   onSelect,

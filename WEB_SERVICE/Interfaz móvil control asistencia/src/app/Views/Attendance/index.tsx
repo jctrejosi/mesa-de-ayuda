@@ -14,7 +14,7 @@ import { InfoCard } from "./InfoCard";
 import { LocationCard } from "./LocationCard";
 import { ClockCard } from "./ClockCard";
 
-type AppScreen = "loading" | "valid" | "invalid" | "confirmed";
+type AppScreen = "loading" | "valid" | "invalid";
 type AttendanceType = "entrada" | "salida";
 type NavTab = "asistencia" | "historial" | "perfil";
 
@@ -27,7 +27,9 @@ function formatTime(d: Date) {
   });
 }
 
-export function AttendanceScreen() {
+export function AttendanceScreen(handleModalContinue: {
+  handleModalContinue: () => void;
+}) {
   const [screen, setScreen] = useState<AppScreen>("loading");
   const [navTab, setNavTab] = useState<NavTab>("asistencia");
   const [now, setNow] = useState(new Date());
@@ -88,11 +90,6 @@ export function AttendanceScreen() {
     setShowModal(true);
   }, [now]);
 
-  const handleModalClose = useCallback(() => {
-    setShowModal(false);
-    setAttendanceType((p) => (p === "entrada" ? "salida" : "entrada"));
-  }, []);
-
   return (
     <div className="relative w-full max-w-[430px] min-h-screen flex flex-col bg-[#F5F7FA] overflow-hidden">
       <TopBar
@@ -118,19 +115,17 @@ export function AttendanceScreen() {
           <div className="mx-4 flex items-center gap-2 flex-wrap">
             <span
               className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-full ${
-                screen === "valid" || screen === "confirmed"
+                screen === "valid"
                   ? "bg-[#DCFCE7] text-[#15803D]"
                   : "bg-[#FEE2E2] text-[#B91C1C]"
               }`}
             >
-              {screen === "valid" || screen === "confirmed" ? (
+              {screen === "valid" ? (
                 <CheckCircle2 size={11} />
               ) : (
                 <AlertTriangle size={11} />
               )}
-              {screen === "valid" || screen === "confirmed"
-                ? "Área permitida"
-                : "Fuera del área"}
+              {screen === "valid" ? "Área permitida" : "Fuera del área"}
             </span>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-full bg-[#EFF3FF] text-[#2563EB]">
               <User size={11} />
@@ -144,7 +139,7 @@ export function AttendanceScreen() {
           code={employeeData.code}
           type={attendanceType}
           time={confirmedTime}
-          onClose={handleModalClose}
+          onContinue={() => handleModalContinue}
         />
       )}
     </div>

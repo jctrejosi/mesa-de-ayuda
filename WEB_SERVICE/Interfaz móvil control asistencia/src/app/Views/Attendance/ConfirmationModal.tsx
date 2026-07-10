@@ -1,27 +1,12 @@
 import {
   MapPin,
   CheckCircle2,
-  AlertTriangle,
   Clock,
   LogIn,
   LogOut,
-  Info,
-  User,
-  History,
-  Home,
   X,
-  Signal,
   ChevronRight,
   Shield,
-  Eye,
-  EyeOff,
-  Mail,
-  Lock,
-  Loader2,
-  Building2,
-  LayoutGrid,
-  ChevronDown,
-  Star,
 } from "lucide-react";
 
 type AttendanceType = "entrada" | "salida";
@@ -29,27 +14,17 @@ type AttendanceType = "entrada" | "salida";
 export function ConfirmationModal({
   type,
   time,
-  onClose,
+  onContinue = () => {},
   code,
 }: {
   type: AttendanceType;
   time: string;
-  onClose: () => void;
+  onContinue?: () => void;
   code: string;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
       <div className="relative w-full max-w-[430px] bg-white rounded-t-[28px] p-6 pb-10 animate-[slideUp_0.35s_cubic-bezier(0.34,1.56,0.64,1)_both]">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#F1F5F9] flex items-center justify-center text-[#64748B]"
-        >
-          <X size={16} />
-        </button>
         <div className="flex flex-col items-center text-center pt-2">
           <div className="w-20 h-20 rounded-full bg-[#F0FDF4] flex items-center justify-center mb-4 shadow-[0_0_0_8px_#DCFCE7]">
             <CheckCircle2
@@ -111,7 +86,9 @@ export function ConfirmationModal({
             ))}
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              onContinue();
+            }}
             className="w-full mt-5 h-[52px] rounded-[16px] bg-[#2563EB] text-white font-semibold text-[15px] flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(37,99,235,0.3)] hover:bg-[#1D4ED8] transition-colors"
           >
             Continuar
