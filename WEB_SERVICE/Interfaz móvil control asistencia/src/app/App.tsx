@@ -18,7 +18,7 @@ const AppContent = () => {
     const checkHealth = async () => {
       const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
       try {
-        const response = await fetch(`${apiUrl}/health`);
+        const response = await fetch(`${apiUrl}/api-status`);
         if (response.ok) {
           console.log("✅ Health check exitoso");
         } else {

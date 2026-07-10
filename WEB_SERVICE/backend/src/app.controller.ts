@@ -9,7 +9,7 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Public()
-  @Get('health')
+  @Get('api-status')
   @HttpCode(HttpStatus.OK)
   async health() {
     const healthCheck = {
