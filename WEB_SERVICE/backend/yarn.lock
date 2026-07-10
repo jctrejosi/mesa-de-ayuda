@@ -390,6 +390,25 @@
     enabled "2.0.x"
     kuler "^2.0.0"
 
+"@dotenvx/dotenvx@^2.4.1":
+  version "2.4.1"
+  resolved "https://registry.yarnpkg.com/@dotenvx/dotenvx/-/dotenvx-2.4.1.tgz#4c135198100670622aa3f814437e071547d715fc"
+  integrity sha512-kwt04HYe8SmyYRPW6/nuM8+MSXav+hMEQvI7SRJTKdU0kM57lf/R7NvxvkC53OnWtTERN0v4DOShXn98ev3hfw==
+  dependencies:
+    "@dotenvx/primitives" "^1.8.1"
+    "@dotenvx/tooling" "^1.0.2"
+    yocto-spinner "^1.2.1"
+
+"@dotenvx/primitives@^1.8.1":
+  version "1.8.1"
+  resolved "https://registry.yarnpkg.com/@dotenvx/primitives/-/primitives-1.8.1.tgz#fe5ebb5fb550eb55348d0ce761d6b2c30c80f873"
+  integrity sha512-xcEkhZDDA9E/ElU27Ft6ZaBBZN4EkXDmD0H4kZB7CcEMfQr43P6RMb7AMU6xYvqLyg2zT8rb0lEuaE8gUlUEiw==
+
+"@dotenvx/tooling@^1.0.2":
+  version "1.0.2"
+  resolved "https://registry.yarnpkg.com/@dotenvx/tooling/-/tooling-1.0.2.tgz#10d65cacfadc03f227981aa3326315dfa754088a"
+  integrity sha512-yf4VwIZUzSqlLy2pe0kH2xk6dME73oYW5XqcHE7M1zA1H0RX/dSUThsSRmpCjp622iW9f6VGQl5Aa6szt5Xc0w==
+
 "@drizzle-team/brocli@^0.10.2":
   version "0.10.2"
   resolved "https://registry.yarnpkg.com/@drizzle-team/brocli/-/brocli-0.10.2.tgz#9757c006a43daaa6f45512e6cf5fabed36fb9da7"
@@ -6363,7 +6382,19 @@ yocto-queue@^0.1.0:
   resolved "https://registry.yarnpkg.com/yocto-queue/-/yocto-queue-0.1.0.tgz#0294eb3dee05028d31ee1a5fa2c556a6aaf10a1b"
   integrity sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==
 
+yocto-spinner@^1.2.1:
+  version "1.2.1"
+  resolved "https://registry.yarnpkg.com/yocto-spinner/-/yocto-spinner-1.2.1.tgz#08074ec66c1bc11c5a2db866eb2f2d42c0af43cb"
+  integrity sha512-9cbFWLhbiZp+820O4pkHGNncI7+MrUGzBOjw8NMG+ewsY+aG0DdEXnr19Smxao32YOjLZRMdn1UtaxcrXOYOIg==
+  dependencies:
+    yoctocolors "^2.1.1"
+
 yoctocolors-cjs@^2.1.3:
   version "2.1.3"
   resolved "https://registry.yarnpkg.com/yoctocolors-cjs/-/yoctocolors-cjs-2.1.3.tgz#7e4964ea8ec422b7a40ac917d3a344cfd2304baa"
   integrity sha512-U/PBtDf35ff0D8X8D0jfdzHYEPFxAI7jJlxZXwCSez5M3190m+QobIfh+sWDWSHMCWWJN2AWamkegn6vr6YBTw==
+
+yoctocolors@^2.1.1:
+  version "2.1.2"
+  resolved "https://registry.yarnpkg.com/yoctocolors/-/yoctocolors-2.1.2.tgz#d795f54d173494e7d8db93150cec0ed7f678c83a"
+  integrity sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==

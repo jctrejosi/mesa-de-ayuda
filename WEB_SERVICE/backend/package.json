@@ -10,7 +10,7 @@
     "build:prod": "node ./node_modules/@nestjs/cli/bin/nest.js build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "start:dev": "nest start --watch",
+    "start:dev": "dotenvx run -f .env.development.local -- nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/src/main.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
@@ -58,6 +58,7 @@
     "winston": "3.19.0"
   },
   "devDependencies": {
+    "@dotenvx/dotenvx": "^2.4.1",
     "@eslint/eslintrc": "3.3.5",
     "@eslint/js": "10.0.1",
     "@nestjs/schematics": "11.1.0",
