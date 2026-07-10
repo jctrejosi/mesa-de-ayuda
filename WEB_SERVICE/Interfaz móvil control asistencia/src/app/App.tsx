@@ -3,13 +3,28 @@ import { AuthProvider, useAuth } from "../contexts/auth.context";
 import { LoginScreen } from "./Views/Login";
 import { AttendanceScreen } from "./Views/Attendance";
 import { InventoryScreen } from "./Views/Inventory";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type NavTab = "asistencia" | "historial" | "inventario" | "perfil";
 
+// Clave para localStorage
+const NAV_TAB_STORAGE_KEY = "app_nav_tab";
+
 const AppContent = () => {
   const { isAuthenticated, isLoading, user, isAdmin, isEmployee } = useAuth();
-  const [navTab, setNavTab] = useState<NavTab>("asistencia");
+
+  // Inicializar navTab desde localStorage o con valor por defecto
+  const [navTab, setNavTab] = useState<NavTab>(() => {
+    const savedTab = localStorage.getItem(NAV_TAB_STORAGE_KEY) as NavTab;
+    // Validar que el valor guardado sea válido
+    if (
+      savedTab &&
+      ["asistencia", "historial", "inventario", "perfil"].includes(savedTab)
+    ) {
+      return savedTab;
+    }
+    return "asistencia";
+  });
 
   console.log("🔍 AppContent State:", {
     isAuthenticated,
@@ -18,7 +33,13 @@ const AppContent = () => {
     isAdmin,
     isEmployee,
     role: user?.role,
+    navTab,
   });
+
+  // Guardar en localStorage cada vez que cambie la pestaña
+  useEffect(() => {
+    localStorage.setItem(NAV_TAB_STORAGE_KEY, navTab);
+  }, [navTab]);
 
   // Mostrar pantalla de carga mientras se verifica la autenticación
   if (isLoading) {
@@ -65,6 +86,11 @@ const AppContent = () => {
   const handleModalContinue = () => {
     console.log("📱 Navegando a inventario desde asistencia");
     setNavTab("inventario");
+  };
+
+  // Función para cambiar de pestaña (con persistencia automática por el useEffect)
+  const handleNavChange = (tab: NavTab) => {
+    setNavTab(tab);
   };
 
   // Empleado o manager → mostrar las pantallas según navTab
