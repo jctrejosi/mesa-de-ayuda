@@ -27,7 +27,9 @@ function formatTime(d: Date) {
   });
 }
 
-export function AttendanceScreen(handleModalContinue: {
+export function AttendanceScreen({
+  handleModalContinue,
+}: {
   handleModalContinue: () => void;
 }) {
   const [screen, setScreen] = useState<AppScreen>("loading");
@@ -139,7 +141,9 @@ export function AttendanceScreen(handleModalContinue: {
           code={employeeData.code}
           type={attendanceType}
           time={confirmedTime}
-          onContinue={() => handleModalContinue}
+          onContinue={() => {
+            handleModalContinue();
+          }}
         />
       )}
     </div>
