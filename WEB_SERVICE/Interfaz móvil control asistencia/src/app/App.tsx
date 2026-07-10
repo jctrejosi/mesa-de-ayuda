@@ -90,7 +90,6 @@ const AppContent = () => {
             <p className="text-[#64748B]">Pantalla de Perfil</p>
           </div>
         )}
-        ¿
       </div>
     </div>
   );
