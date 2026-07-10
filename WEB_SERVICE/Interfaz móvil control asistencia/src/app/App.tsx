@@ -111,7 +111,7 @@ const AppContent = () => {
   if (isAdmin) {
     // Redirigir si por alguna razón no se hizo en el login
     console.log("🚀 Redirigiendo a administración desde AppContent...");
-    window.location.href = "http://localhost:5174";
+    window.location.href = import.meta.env.VITE_ADMIN_URL;
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-[#F5F7FA]">
         <div className="flex flex-col items-center gap-4">
