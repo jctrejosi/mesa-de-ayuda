@@ -13,7 +13,7 @@ const api: AxiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true,
+  withCredentials: import.meta.env.VITE_ENABLE_CREDENTIALS,
 });
 
 // Interceptor: Manejar errores de autenticación

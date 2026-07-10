@@ -10,7 +10,7 @@ import { httpLoggerMiddleware } from './utils/logger';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
-import { CorsConfig } from './config/configuration';
+import { CorsConfig, HelmetConfig } from './config/configuration';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -32,11 +32,18 @@ async function bootstrap() {
   );
 
   // Seguridad
+  const helmetConfig = configService.get<HelmetConfig>('app.helmet');
+
   app.use(
     helmet({
-      crossOriginResourcePolicy: { policy: 'cross-origin' }, // 👈 Permite recursos cross-origin
-      crossOriginOpenerPolicy: { policy: 'unsafe-none' }, // 👈 Permite popups
-      crossOriginEmbedderPolicy: false, // 👈 Deshabilita COEP
+      crossOriginResourcePolicy: helmetConfig?.crossOriginResourcePolicy ?? {
+        policy: 'cross-origin',
+      },
+      crossOriginOpenerPolicy: helmetConfig?.crossOriginOpenerPolicy ?? {
+        policy: 'unsafe-none',
+      },
+      crossOriginEmbedderPolicy:
+        helmetConfig?.crossOriginEmbedderPolicy ?? false,
     }),
   );
   app.use(compression());
