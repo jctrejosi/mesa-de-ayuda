@@ -4,7 +4,7 @@
 
 -- 1. company
 INSERT INTO company (name, nit, active)
-VALUES ('Nexus Technologies S.A.S.', '900.123.456-7', TRUE);
+VALUES ('DSI-SA Palermo', '900.123.456-7', TRUE);
 SET @company_id = LAST_INSERT_ID();
 
 -- 2. branch

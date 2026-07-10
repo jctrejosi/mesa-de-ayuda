@@ -3,6 +3,8 @@
 -- ============================================================
 CHARACTER SET utf8mb4
 COLLATE utf8mb4_unicode_ci;
+DROP DATABASE IF EXISTS helpdesk;
+CREATE DATABASE helpdesk
 
 USE helpdesk;
 
