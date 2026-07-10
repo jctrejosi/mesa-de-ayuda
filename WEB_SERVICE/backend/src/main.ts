@@ -32,7 +32,13 @@ async function bootstrap() {
   );
 
   // Seguridad
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' }, // 👈 Permite recursos cross-origin
+      crossOriginOpenerPolicy: { policy: 'unsafe-none' }, // 👈 Permite popups
+      crossOriginEmbedderPolicy: false, // 👈 Deshabilita COEP
+    }),
+  );
   app.use(compression());
   app.use(httpLoggerMiddleware());
   app.use(cookieParser());
