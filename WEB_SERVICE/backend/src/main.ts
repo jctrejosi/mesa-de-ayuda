@@ -10,6 +10,7 @@ import { httpLoggerMiddleware } from './utils/logger';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import { CorsConfig } from './config/configuration';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -37,14 +38,20 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // CORS configurado desde .env
-  const corsOptions = configService.get<{
-    origin: string[];
-    credentials: boolean;
-  }>('app.cors');
+  const corsOptions = configService.get<CorsConfig>('app.cors');
 
   app.enableCors({
-    origin: corsOptions?.origin ?? [],
-    credentials: corsOptions?.credentials ?? true,
+    origin: corsOptions?.origin ?? true,
+    credentials: corsOptions?.credentials ?? false,
+    methods: corsOptions?.methods ?? ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: corsOptions?.allowedHeaders ?? [
+      'Content-Type',
+      'Authorization',
+    ],
+    exposedHeaders: corsOptions?.exposedHeaders ?? [],
+    maxAge: corsOptions?.maxAge ?? 86400,
+    preflightContinue: corsOptions?.preflightContinue ?? false,
+    optionsSuccessStatus: corsOptions?.optionsSuccessStatus ?? 204,
   });
 
   // Swagger (solo en desarrollo)

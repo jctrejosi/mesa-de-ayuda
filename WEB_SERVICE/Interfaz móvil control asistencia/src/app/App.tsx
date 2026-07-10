@@ -4,13 +4,18 @@ import { LoginScreen } from "./Views/Login";
 import { AttendanceScreen } from "./Views/Attendance";
 import { InventoryScreen } from "./Views/Inventory";
 import { BottomNav } from "./BottomNav";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type NavTab = "asistencia" | "historial" | "inventario" | "perfil";
 
 const AppContent = () => {
   const { isAuthenticated, isLoading, user, isAdmin, isEmployee } = useAuth();
   const [navTab, setNavTab] = useState<NavTab>("asistencia");
+
+  useEffect(() => {
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    fetch(`${apiUrl}/health`);
+  }, []);
 
   console.log("🔍 AppContent State:", {
     isAuthenticated,

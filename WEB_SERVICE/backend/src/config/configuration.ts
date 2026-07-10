@@ -11,8 +11,14 @@ export interface JwtConfig {
 }
 
 export interface CorsConfig {
-  origin: string[];
+  origin: string[] | boolean | string;
   credentials: boolean;
+  methods: string[];
+  allowedHeaders: string[];
+  exposedHeaders: string[];
+  maxAge: number;
+  preflightContinue: boolean;
+  optionsSuccessStatus: number;
 }
 
 export interface MicrosoftConfig {
@@ -58,14 +64,21 @@ export default registerAs('app', (): AppConfig => ({
     refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN ?? '30d',
   },
   cors: {
-    origin: (
-      process.env.CORS_ORIGIN ?? 'http://localhost:5173,http://localhost:5174'
-    )
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0),
-    credentials: true,
+    origin: '*', // 👈 Permite cualquier origen
+    credentials: false, // 👈 Deshabilita credenciales (necesario si usas '*')
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'X-Requested-With',
+    ],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 86400, // 24 horas en segundos (cache de preflight)
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   },
+
   microsoft: {
     clientId: process.env.MICROSOFT_CLIENT_ID ?? '',
     clientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? '',
