@@ -23,9 +23,12 @@ import { UsersModule } from './modules/users/users.module';
 import { AuditLogModule } from './modules/audit/audit-log.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 
+import configuration from './config/configuration';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
+      load: [configuration],
       isGlobal: true,
       envFilePath:
         process.env.NODE_ENV === 'production'

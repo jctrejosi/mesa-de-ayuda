@@ -90,7 +90,7 @@ export default registerAs('app', (): AppConfig => ({
       ? process.env.CORS_ORIGIN.split(',')
           .map((s) => s.trim())
           .filter((s) => s.length > 0)
-      : ['http://localhost:5173'],
+      : [],
     credentials: process.env.CORS_CREDENTIALS === 'true' || false,
     methods: process.env.CORS_METHODS
       ? process.env.CORS_METHODS.split(',')
