@@ -27,7 +27,12 @@ import { InventoryModule } from './modules/inventory/inventory.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath:
+        process.env.NODE_ENV === 'production'
+          ? '.env.production'
+          : '.env.development.local',
+      // ✅ Expandir variables (para usar ${VAR} en el .env)
+      expandVariables: true,
     }),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],

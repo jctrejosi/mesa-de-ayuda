@@ -12,22 +12,6 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { CorsConfig, HelmetConfig } from './config/configuration';
 
-// ✅ Cargar variables de entorno desde .env.development.local
-import * as dotenv from 'dotenv';
-import * as path from 'path';
-
-// Determinar qué archivo .env cargar según NODE_ENV
-const envFile =
-  process.env.NODE_ENV === 'production'
-    ? '.env.production'
-    : process.env.NODE_ENV === 'development'
-      ? '.env.development.local'
-      : '.env';
-
-dotenv.config({ path: path.resolve(process.cwd(), envFile) });
-
-console.log(`📁 Cargando configuración desde: ${envFile}`);
-
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
@@ -36,7 +20,7 @@ async function bootstrap() {
   const corsOptions = configService.get<CorsConfig>('app.cors');
 
   app.enableCors({
-    origin: corsOptions?.origin ?? ['http://localhost:5173'],
+    origin: corsOptions?.origin,
     credentials: corsOptions?.credentials ?? true,
     methods: corsOptions?.methods ?? [
       'GET',
@@ -117,10 +101,12 @@ async function bootstrap() {
 
   console.log(`🚀 Server running on http://localhost:${port}`);
   console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
-  console.log(`📁 Archivo .env: ${envFile}`);
   console.log(
-    `✅ CORS configurado con: ${JSON.stringify(corsOptions?.origin ?? ['http://localhost:5173'])}`,
+    `✅ CORS configurado con: ${JSON.stringify(corsOptions?.origin)}`,
   );
+  console.log('🔍 Variables de entorno cargadas:');
+  console.log('CORS_ORIGIN:', process.env.CORS_ORIGIN);
+  console.log('NODE_ENV:', process.env.NODE_ENV);
 }
 
 bootstrap();
