@@ -38,8 +38,28 @@ export interface UserWithRelations {
   companyName?: string | null;
 }
 
+// ✅ Interface para la respuesta plana que espera el frontend
+export interface UserResponse {
+  id: number;
+  username: string;
+  fullName: string;
+  email: string;
+  employeeCode: string;
+  role: 'admin' | 'manager' | 'employee';
+  status: 'ACTIVE' | 'INACTIVE' | 'VACATION' | 'SUSPENDED';
+  branchName: string | null;
+  departmentName: string | null;
+  positionName: string | null;
+  phone: string | null;
+  documentNumber: string | null;
+  hireDate: string | null;
+  lastLogin: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface UserListResponse {
-  users: UserWithRelations[];
+  users: UserResponse[];
   total: number;
   page: number;
   limit: number;
@@ -53,13 +73,47 @@ export class UsersService {
   private readonly logger = createContextLogger('UsersService');
   private readonly bcryptSaltRounds = 10;
 
-  constructor(
-    // Removed unused configService property
-    private readonly companyService: CompanyService,
-  ) {}
+  constructor(private readonly companyService: CompanyService) {}
 
   private get db() {
     return getDb();
+  }
+
+  // ✅ Método para transformar UserWithRelations a UserResponse
+  private transformToResponse(user: UserWithRelations): UserResponse {
+    const fullName = [
+      user.person.firstName,
+      user.person.middleName,
+      user.person.lastName,
+      user.person.secondLastName,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return {
+      id: user.account.id,
+      username: user.account.username,
+      fullName: fullName || 'Usuario',
+      email: user.person.email || '',
+      employeeCode: user.employee.employeeCode || '',
+      role: user.account.role || 'employee',
+      status: user.employee.status || 'ACTIVE',
+      branchName: user.branchName || null,
+      departmentName: user.departmentName || null,
+      positionName: user.positionName || null,
+      phone: user.person.phone || null,
+      documentNumber: user.person.documentNumber || null,
+      hireDate: user.employee.hireDate
+        ? user.employee.hireDate.toISOString().split('T')[0]
+        : null,
+      lastLogin: user.account.lastLogin
+        ? user.account.lastLogin.toISOString()
+        : null,
+      isActive: user.account.active ?? true,
+      createdAt: user.account.createdAt
+        ? user.account.createdAt.toISOString()
+        : new Date().toISOString(),
+    };
   }
 
   // ============================================================
@@ -72,9 +126,10 @@ export class UsersService {
       limit = 20,
       search,
       status,
-      branchId,
-      departmentId,
-      positionId,
+      role,
+      branchName,
+      departmentName,
+      positionName,
     } = query;
     const offset = (page - 1) * limit;
 
@@ -87,6 +142,7 @@ export class UsersService {
           like(person.lastName, `%${search}%`),
           like(employee.employeeCode, `%${search}%`),
           like(account.username, `%${search}%`),
+          like(person.email, `%${search}%`),
         ),
       );
     }
@@ -95,20 +151,21 @@ export class UsersService {
       conditions.push(eq(employee.status, status));
     }
 
-    if (branchId) {
-      conditions.push(eq(employee.branchId, branchId));
+    if (role) {
+      conditions.push(eq(account.role, role));
     }
 
-    if (departmentId) {
-      conditions.push(eq(employee.departmentId, departmentId));
+    if (branchName) {
+      conditions.push(eq(branch.name, branchName));
     }
 
-    if (positionId) {
-      conditions.push(eq(employee.positionId, positionId));
+    if (departmentName) {
+      conditions.push(eq(department.name, departmentName));
     }
 
-    // Solo usuarios activos por defecto
-    conditions.push(eq(account.active, true));
+    if (positionName) {
+      conditions.push(eq(position.name, positionName));
+    }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -134,18 +191,22 @@ export class UsersService {
       .limit(limit)
       .offset(offset);
 
-    // Contar total
     const countResult = await this.db
       .select({ total: sql<number>`COUNT(*)` })
       .from(account)
       .innerJoin(employee, eq(account.employeeId, employee.id))
       .innerJoin(person, eq(employee.personId, person.id))
+      .leftJoin(branch, eq(employee.branchId, branch.id))
+      .leftJoin(department, eq(employee.departmentId, department.id))
+      .leftJoin(position, eq(employee.positionId, position.id))
+      .leftJoin(company, eq(branch.companyId, company.id))
       .where(whereClause);
 
     const total = Number(countResult[0]?.total || 0);
 
-    return {
-      users: users.map((u) => ({
+    // ✅ Transformar cada usuario a la respuesta plana
+    const transformedUsers = users.map((u) => {
+      const userWithRelations: UserWithRelations = {
         account: u.account,
         employee: u.employee,
         person: u.person,
@@ -153,7 +214,12 @@ export class UsersService {
         departmentName: u.departmentName,
         positionName: u.positionName,
         companyName: u.companyName,
-      })),
+      };
+      return this.transformToResponse(userWithRelations);
+    });
+
+    return {
+      users: transformedUsers,
       total,
       page,
       limit,
@@ -165,7 +231,7 @@ export class UsersService {
   // OBTENER USUARIO POR ID
   // ============================================================
 
-  async findById(accountId: number): Promise<UserWithRelations | null> {
+  async findById(accountId: number): Promise<UserResponse | null> {
     const results = await this.db
       .select({
         account: account,
@@ -191,7 +257,7 @@ export class UsersService {
     }
 
     const row = results[0];
-    return {
+    const userWithRelations: UserWithRelations = {
       account: row.account,
       employee: row.employee,
       person: row.person,
@@ -200,10 +266,11 @@ export class UsersService {
       positionName: row.positionName,
       companyName: row.companyName,
     };
+    return this.transformToResponse(userWithRelations);
   }
 
   /**
-   * Obtiene un usuario por su nombre de usuario
+   * Obtiene un usuario por su nombre de usuario (para auth)
    */
   async findByUsername(username: string): Promise<UserWithRelations | null> {
     const results = await this.db
@@ -246,12 +313,8 @@ export class UsersService {
   // CREAR USUARIO (CON TRANSACCIÓN)
   // ============================================================
 
-  // ============================================================
-  // CREAR USUARIO (CON TRANSACCIÓN)
-  // ============================================================
-
-  async create(data: CreateUserDto): Promise<UserWithRelations> {
-    // 1. Validar que el username no exista
+  async create(data: CreateUserDto): Promise<UserResponse> {
+    // Validar que el username no exista
     const existingAccount = await this.db
       .select()
       .from(account)
@@ -262,7 +325,6 @@ export class UsersService {
       throw new ConflictException(`El usuario "${data.username}" ya existe`);
     }
 
-    // 2. Validar que el documento no exista
     if (data.documentNumber) {
       const existingPerson = await this.db
         .select()
@@ -277,7 +339,6 @@ export class UsersService {
       }
     }
 
-    // 3. Validar que el email no exista
     if (data.email) {
       const existingEmail = await this.db
         .select()
@@ -292,7 +353,6 @@ export class UsersService {
       }
     }
 
-    // 4. Validar la consistencia de la empresa
     let companyId: number | null = null;
 
     if (data.branchId) {
@@ -342,17 +402,12 @@ export class UsersService {
       }
     }
 
-    // ============================================================
-    // TRANSACCIÓN: Crear persona, empleado y cuenta
-    // ============================================================
-
-    let personId: number = 0;
-    let employeeId: number = 0;
-    let accountId: number = 0;
+    let personId = 0;
+    let employeeId = 0;
+    let accountId = 0;
 
     try {
       await this.db.transaction(async (tx) => {
-        // 5. Crear la persona
         const newPerson: NewPerson = {
           documentType: data.documentType || null,
           documentNumber: data.documentNumber || null,
@@ -380,7 +435,6 @@ export class UsersService {
           throw new BadRequestException('Error al crear la persona');
         }
 
-        // 6. Crear el empleado
         const newEmployee: NewEmployee = {
           personId,
           employeeCode:
@@ -400,7 +454,6 @@ export class UsersService {
           throw new BadRequestException('Error al crear el empleado');
         }
 
-        // 7. Crear la cuenta
         const hashedPassword = await bcrypt.hash(
           data.password,
           this.bcryptSaltRounds,
@@ -441,12 +494,10 @@ export class UsersService {
       );
     }
 
-    // 8. Verificar que el usuario se creó correctamente
     if (!accountId) {
       throw new BadRequestException('Error al crear el usuario');
     }
 
-    // 9. Obtener el usuario completo
     const user = await this.findById(accountId);
     if (!user) {
       throw new BadRequestException('Error al recuperar el usuario creado');
@@ -457,24 +508,25 @@ export class UsersService {
   }
 
   // ============================================================
-  // ACTUALIZAR USUARIO (CON TRANSACCIÓN)
+  // ACTUALIZAR USUARIO
   // ============================================================
 
-  async update(
-    accountId: number,
-    data: UpdateUserDto,
-  ): Promise<UserWithRelations> {
+  async update(accountId: number, data: UpdateUserDto): Promise<UserResponse> {
     const existing = await this.findById(accountId);
     if (!existing) {
       throw new NotFoundException(`Usuario con ID ${accountId} no encontrado`);
     }
 
-    // Construir los datos de actualización
+    // Obtener los datos completos para actualizar
+    const userWithRelations = await this.findByUsername(existing.username);
+    if (!userWithRelations) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
     const personUpdate: Partial<NewPerson> = {};
     const employeeUpdate: Partial<NewEmployee> = {};
     const accountUpdate: Partial<NewAccount> = {};
 
-    // 1. Preparar actualización de persona
     if (data.documentType !== undefined)
       personUpdate.documentType = data.documentType;
     if (data.documentNumber !== undefined)
@@ -498,7 +550,6 @@ export class UsersService {
     if (data.state !== undefined) personUpdate.state = data.state;
     if (data.country !== undefined) personUpdate.country = data.country;
 
-    // 2. Preparar actualización de empleado
     if (data.employeeCode !== undefined)
       employeeUpdate.employeeCode = data.employeeCode;
     if (data.branchId !== undefined) {
@@ -548,9 +599,8 @@ export class UsersService {
         : null;
     if (data.status !== undefined) employeeUpdate.status = data.status;
 
-    // 3. Preparar actualización de cuenta
     if (data.username !== undefined) {
-      if (data.username !== existing.account.username) {
+      if (data.username !== existing.username) {
         const existingUsername = await this.db
           .select()
           .from(account)
@@ -573,13 +623,11 @@ export class UsersService {
         this.bcryptSaltRounds,
       );
     }
-    const accountData = data as UpdateUserDto & { role?: Account['role'] };
-    if (accountData.role !== undefined) {
-      accountUpdate.role = accountData.role;
+    if (data.role !== undefined) {
+      accountUpdate.role = data.role;
     }
     if (data.active !== undefined) accountUpdate.active = data.active;
 
-    // 4. Ejecutar actualizaciones en transacción
     const hasPersonUpdate = Object.keys(personUpdate).length > 0;
     const hasEmployeeUpdate = Object.keys(employeeUpdate).length > 0;
     const hasAccountUpdate = Object.keys(accountUpdate).length > 0;
@@ -591,14 +639,14 @@ export class UsersService {
             await tx
               .update(person)
               .set(personUpdate)
-              .where(eq(person.id, existing.person.id));
+              .where(eq(person.id, userWithRelations.person.id));
           }
 
           if (hasEmployeeUpdate) {
             await tx
               .update(employee)
               .set(employeeUpdate)
-              .where(eq(employee.id, existing.employee.id));
+              .where(eq(employee.id, userWithRelations.employee.id));
           }
 
           if (hasAccountUpdate) {
@@ -624,7 +672,6 @@ export class UsersService {
       }
     }
 
-    // 5. Obtener el usuario actualizado
     const updated = await this.findById(accountId);
     if (!updated) {
       throw new BadRequestException(
@@ -633,7 +680,7 @@ export class UsersService {
     }
 
     this.logger.info(
-      `Usuario actualizado: ${updated.account.username} (ID: ${accountId})`,
+      `Usuario actualizado: ${updated.username} (ID: ${accountId})`,
     );
     return updated;
   }
@@ -648,44 +695,13 @@ export class UsersService {
       throw new NotFoundException(`Usuario con ID ${accountId} no encontrado`);
     }
 
-    // Desactivar cuenta en lugar de eliminar físicamente
     await this.db
       .update(account)
       .set({ active: false })
       .where(eq(account.id, accountId));
 
     this.logger.info(
-      `Usuario desactivado: ${existing.account.username} (ID: ${accountId})`,
-    );
-    return true;
-  }
-
-  // ============================================================
-  // ELIMINAR USUARIO FÍSICAMENTE (CON TRANSACCIÓN)
-  // ============================================================
-
-  async deletePermanently(accountId: number): Promise<boolean> {
-    const existing = await this.findById(accountId);
-    if (!existing) {
-      throw new NotFoundException(`Usuario con ID ${accountId} no encontrado`);
-    }
-
-    try {
-      await this.db.transaction(async (tx) => {
-        // Eliminar en orden: account, employee, person
-        await tx.delete(account).where(eq(account.id, accountId));
-        await tx.delete(employee).where(eq(employee.id, existing.employee.id));
-        await tx.delete(person).where(eq(person.id, existing.person.id));
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Error desconocido';
-      this.logger.error(`Error eliminando usuario permanentemente: ${message}`);
-      throw new BadRequestException('Error al eliminar el usuario');
-    }
-
-    this.logger.info(
-      `Usuario eliminado permanentemente: ${existing.account.username} (ID: ${accountId})`,
+      `Usuario desactivado: ${existing.username} (ID: ${accountId})`,
     );
     return true;
   }
@@ -700,14 +716,14 @@ export class UsersService {
       throw new NotFoundException(`Usuario con ID ${accountId} no encontrado`);
     }
 
-    const newStatus = !existing.account.active;
+    const newStatus = !existing.isActive;
     await this.db
       .update(account)
       .set({ active: newStatus })
       .where(eq(account.id, accountId));
 
     this.logger.info(
-      `Usuario ${newStatus ? 'activado' : 'desactivado'}: ${existing.account.username}`,
+      `Usuario ${newStatus ? 'activado' : 'desactivado'}: ${existing.username}`,
     );
     return { active: newStatus };
   }
@@ -721,21 +737,22 @@ export class UsersService {
     currentPassword: string,
     newPassword: string,
   ): Promise<boolean> {
-    const existing = await this.findById(accountId);
-    if (!existing) {
+    // Obtener el usuario con relaciones para tener el hash
+    const userWithRelations = await this.findByUsername(
+      (await this.findById(accountId))?.username || '',
+    );
+    if (!userWithRelations) {
       throw new NotFoundException(`Usuario con ID ${accountId} no encontrado`);
     }
 
-    // Verificar contraseña actual
     const isPasswordValid = await bcrypt.compare(
       currentPassword,
-      existing.account.passwordHash,
+      userWithRelations.account.passwordHash,
     );
     if (!isPasswordValid) {
       throw new BadRequestException('Contraseña actual incorrecta');
     }
 
-    // Actualizar contraseña
     const hashedPassword = await bcrypt.hash(
       newPassword,
       this.bcryptSaltRounds,
@@ -745,9 +762,7 @@ export class UsersService {
       .set({ passwordHash: hashedPassword })
       .where(eq(account.id, accountId));
 
-    this.logger.info(
-      `Contraseña actualizada para usuario: ${existing.account.username}`,
-    );
+    this.logger.info(`Contraseña actualizada para usuario ID: ${accountId}`);
     return true;
   }
 
@@ -762,7 +777,6 @@ export class UsersService {
     byStatus: { status: string; count: number }[];
     byRole: { role: string; count: number }[];
   }> {
-    // Total de cuentas
     const totalResult = await this.db
       .select({ count: sql<number>`COUNT(*)` })
       .from(account);
@@ -777,7 +791,6 @@ export class UsersService {
       .from(account)
       .where(eq(account.active, false));
 
-    // Estadísticas por estado de empleado
     const byStatus = await this.db
       .select({
         status: employee.status,
@@ -786,7 +799,6 @@ export class UsersService {
       .from(employee)
       .groupBy(employee.status);
 
-    // Estadísticas por rol de cuenta
     const byRole = await this.db
       .select({
         role: account.role,

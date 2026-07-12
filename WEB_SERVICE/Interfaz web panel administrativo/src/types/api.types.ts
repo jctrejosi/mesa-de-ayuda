@@ -97,14 +97,6 @@ export interface UserWithRelations {
   companyName?: string | null;
 }
 
-export interface UserListResponse {
-  users: UserWithRelations[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
 export interface UserQueryDto {
   page?: number;
   limit?: number;
@@ -113,6 +105,17 @@ export interface UserQueryDto {
   branchId?: number;
   departmentId?: number;
   positionId?: number;
+}
+
+export interface UserFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  role?: "admin" | "manager" | "employee";
+  status?: "ACTIVE" | "INACTIVE" | "VACATION" | "SUSPENDED";
+  branchName?: string;
+  departmentName?: string;
+  positionName?: string;
 }
 
 export interface CreateUserRequest {
@@ -152,6 +155,33 @@ export type UpdateUserRequest = Partial<Omit<CreateUserRequest, "password">> & {
   terminationDate?: string;
   active?: boolean;
 };
+
+export interface UserRecord {
+  id: number;
+  username: string;
+  fullName: string;
+  email: string;
+  employeeCode: string;
+  role: "admin" | "manager" | "employee";
+  status: "ACTIVE" | "INACTIVE" | "VACATION" | "SUSPENDED";
+  branchName: string | null;
+  departmentName: string | null;
+  positionName: string | null;
+  phone: string | null;
+  documentNumber: string | null;
+  hireDate: string | null;
+  lastLogin: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface UserListResponse {
+  users: UserRecord[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 // ============================================================
 // DASHBOARD

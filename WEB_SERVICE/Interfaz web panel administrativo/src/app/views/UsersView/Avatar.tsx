@@ -1,9 +1,11 @@
 export const Avatar = ({
-  user,
+  initials,
   size = "md",
+  avatarColor = "black",
 }: {
-  user: { initials: string; avatarColor: string };
+  initials: string;
   size?: "sm" | "md" | "lg";
+  avatarColor?: string;
 }) => {
   const sizes = {
     sm: "w-7 h-7 text-xs",
@@ -13,9 +15,9 @@ export const Avatar = ({
   return (
     <div
       className={`${sizes[size]} rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0`}
-      style={{ backgroundColor: user.avatarColor }}
+      style={{ backgroundColor: avatarColor }}
     >
-      {user.initials}
+      {initials}
     </div>
   );
 };

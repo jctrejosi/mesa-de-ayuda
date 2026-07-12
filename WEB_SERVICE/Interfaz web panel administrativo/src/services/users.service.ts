@@ -4,22 +4,19 @@ import type {
   UserWithRelations,
   CreateUserRequest,
   UpdateUserRequest,
+  UserFilters,
 } from "../types";
 
 export const usersService = {
   /**
    * Listar usuarios con paginación y filtros
    */
-  async findAll(params?: {
-    page?: number;
-    limit?: number;
-    search?: string;
-    status?: string;
-    branchId?: number;
-    departmentId?: number;
-    positionId?: number;
-  }): Promise<UserListResponse> {
-    const response = await api.get<UserListResponse>("/users", { params });
+  async list(filters: UserFilters = {}): Promise<UserListResponse> {
+    const defaultFilters = { page: 1, limit: 20 };
+    const payload = { ...defaultFilters, ...filters };
+
+    const response = await api.post("/users/list", payload);
+    // Asumiendo que el interceptor ya devuelve los datos directamente
     return response.data;
   },
 

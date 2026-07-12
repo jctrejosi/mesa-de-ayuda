@@ -55,35 +55,35 @@ type TransformContext = {
 export class UserResponseDto {
   // Campos de la cuenta
   @Expose()
-  id: number;
+  id!: number;
 
   @Expose()
-  username: string;
+  username!: string;
 
   @Expose()
-  role: 'admin' | 'manager' | 'employee';
+  role!: 'admin' | 'manager' | 'employee';
 
   @Expose()
-  active: boolean;
+  active!: boolean;
 
   @Expose()
-  employeeId: number;
+  employeeId!: number;
 
   @Expose()
-  lastLogin: Date | null;
+  lastLogin!: Date | null;
 
   @Expose()
-  createdAt: Date;
+  createdAt!: Date;
 
   // Campos sensibles - EXCLUIDOS
   @Exclude()
-  passwordHash: string;
+  passwordHash!: string;
 
   @Exclude()
-  failedAttempts: number;
+  failedAttempts!: number;
 
   @Exclude()
-  lockedUntil: Date | null;
+  lockedUntil!: Date | null;
 
   // Campos de empleado
   @Expose()
@@ -91,72 +91,60 @@ export class UserResponseDto {
     const employee = obj.employee || obj;
     return (employee as EmployeeLike)?.employeeCode || null;
   })
-  employeeCode: string | null;
+  employeeCode!: string | null;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
     const employee = obj.employee || obj;
     return (employee as EmployeeLike)?.status || null;
   })
-  status: string | null;
+  status!: string | null;
 
   // Campos de persona
   @Expose()
-  @Transform(({ obj }: TransformContext) => {
-    const person = (obj.person || obj) as PersonLike;
-    const fullName = [
-      person?.firstName,
-      person?.middleName,
-      person?.lastName,
-      person?.secondLastName,
-    ]
-      .filter(Boolean)
-      .join(' ');
-    return fullName || 'Sin nombre';
-  })
-  fullName: string;
+  fullName!: string;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
     const person = (obj.person || obj) as PersonLike;
     return person?.email || null;
   })
-  email: string | null;
+  email!: string | null;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
     const person = (obj.person || obj) as PersonLike;
     return person?.documentNumber || null;
   })
-  documentNumber: string | null;
+  documentNumber!: string | null;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
     const person = (obj.person || obj) as PersonLike;
     return person?.phone || null;
   })
-  phone: string | null;
+  phone!: string | null;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
     const person = (obj.person || obj) as PersonLike;
     return person?.mobile || null;
   })
-  mobile: string | null;
+  mobile!: string | null;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
     const person = (obj.person || obj) as PersonLike;
     return person?.address || null;
   })
-  address: string | null;
+  address!: string | null;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
     const person = (obj.person || obj) as PersonLike;
     return person?.city || null;
   })
-  city: string | null;
+  city!: string | null;
 
   // Relaciones
   @Expose()
@@ -165,7 +153,7 @@ export class UserResponseDto {
     if (typeof branch === 'string') return branch;
     return (branch as BranchLike)?.name || null;
   })
-  branchName: string | null;
+  branchName!: string | null;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
@@ -173,7 +161,7 @@ export class UserResponseDto {
     if (typeof department === 'string') return department;
     return (department as DepartmentLike)?.name || null;
   })
-  departmentName: string | null;
+  departmentName!: string | null;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
@@ -181,7 +169,7 @@ export class UserResponseDto {
     if (typeof position === 'string') return position;
     return (position as PositionLike)?.name || null;
   })
-  positionName: string | null;
+  positionName!: string | null;
 
   @Expose()
   @Transform(({ obj }: TransformContext) => {
@@ -189,5 +177,5 @@ export class UserResponseDto {
     if (typeof company === 'string') return company;
     return (company as CompanyLike)?.name || null;
   })
-  companyName: string | null;
+  companyName!: string | null;
 }

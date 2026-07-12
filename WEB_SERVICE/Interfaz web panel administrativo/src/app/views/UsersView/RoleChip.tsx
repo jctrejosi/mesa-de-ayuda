@@ -1,27 +1,4 @@
-import {
-  Search,
-  Users,
-  AlertTriangle,
-  XCircle,
-  X,
-  Plus,
-  CheckCircle2,
-  TrendingUp,
-  TrendingDown,
-  Save,
-  Eye,
-  UserCog,
-  ShieldCheck,
-  QrCode,
-  Paperclip,
-  Lock,
-  Briefcase,
-  UserCheck,
-  UserX,
-  Edit3,
-  PauseCircle,
-} from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { Users, UserCog, ShieldCheck } from "lucide-react";
 
 type UserRole = "admin" | "manager" | "employee";
 

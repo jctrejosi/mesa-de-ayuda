@@ -7,7 +7,6 @@ import {
   Patch,
   Body,
   Param,
-  Query,
   UseGuards,
   ParseIntPipe,
   HttpCode,
@@ -34,8 +33,9 @@ export class UsersController {
    * Listar todos los usuarios (con filtros y paginación)
    * GET /api/users
    */
-  @Get()
-  async findAll(@Query() query: UserQueryDto) {
+  @Post('list')
+  async findAll(@Body() query: UserQueryDto) {
+    // 👈 Body en lugar de Query
     return this.usersService.findAll(query);
   }
 

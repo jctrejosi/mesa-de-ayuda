@@ -170,6 +170,13 @@ export class UpdateUserDto {
   @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres' })
   password?: string;
 
+  // ✅ NUEVO: Campo para actualizar el rol
+  @IsOptional()
+  @IsEnum(['admin', 'manager', 'employee'], {
+    message: 'El rol debe ser: admin, manager o employee',
+  })
+  role?: 'admin' | 'manager' | 'employee';
+
   @IsOptional()
   @IsBoolean({ message: 'El campo activo debe ser un booleano' })
   @Type(() => Boolean)

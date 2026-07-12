@@ -1,6 +1,7 @@
 // ─── User Filter Bar ──────────────────────────────────────────────────────────
 
 import { Plus, Search, X } from "lucide-react";
+import { UserFilters } from "../../../types";
 
 const BRANCHES = ["Sede Central Lima", "Sede Norte", "Sede Sur"];
 const DEPARTMENTS = [
@@ -26,12 +27,31 @@ export const UserFilterBar = ({
   setFilters,
   onCreateUser,
 }: {
-  filters: UserFiltersState;
-  setFilters: (f: UserFiltersState) => void;
+  filters: UserFilters;
+  setFilters: (f: UserFilters) => void;
   onCreateUser: () => void;
 }) => {
-  const up = (k: keyof UserFiltersState, v: string) =>
-    setFilters({ ...filters, [k]: v });
+  const up = (k: keyof UserFilters, v: string) => {
+    setFilters({ ...filters, [k]: v === "" ? undefined : v });
+  };
+
+  const hasActiveFilters =
+    filters.search ||
+    filters.role ||
+    filters.status ||
+    filters.branchName ||
+    filters.departmentName;
+
+  const clearFilters = () => {
+    setFilters({
+      search: "",
+      role: undefined,
+      status: undefined,
+      branchName: undefined,
+      departmentName: "",
+    });
+  };
+
   return (
     <div className="bg-white rounded-xl border border-border p-4 flex flex-wrap items-center gap-3">
       <div className="relative flex-1 min-w-44">
@@ -47,8 +67,9 @@ export const UserFilterBar = ({
           className="w-full h-8 pl-8 pr-3 rounded-lg bg-slate-50 border border-border text-xs text-slate-600 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 transition-all"
         />
       </div>
+
       <select
-        value={filters.role}
+        value={filters.role || undefined}
         onChange={(e) => up("role", e.target.value)}
         className="h-8 px-3 rounded-lg bg-slate-50 border border-border text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 cursor-pointer"
       >
@@ -57,8 +78,9 @@ export const UserFilterBar = ({
         <option value="manager">Manager</option>
         <option value="employee">Empleado</option>
       </select>
+
       <select
-        value={filters.status}
+        value={filters.status || undefined}
         onChange={(e) => up("status", e.target.value)}
         className="h-8 px-3 rounded-lg bg-slate-50 border border-border text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 cursor-pointer"
       >
@@ -68,9 +90,10 @@ export const UserFilterBar = ({
         <option value="VACATION">Vacaciones</option>
         <option value="SUSPENDED">Suspendido</option>
       </select>
+
       <select
-        value={filters.branch}
-        onChange={(e) => up("branch", e.target.value)}
+        value={filters.branchName || undefined}
+        onChange={(e) => up("branchName", e.target.value)}
         className="h-8 px-3 rounded-lg bg-slate-50 border border-border text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 cursor-pointer"
       >
         <option value="">Todas las sucursales</option>
@@ -80,9 +103,10 @@ export const UserFilterBar = ({
           </option>
         ))}
       </select>
+
       <select
-        value={filters.department}
-        onChange={(e) => up("department", e.target.value)}
+        value={filters.departmentName || undefined}
+        onChange={(e) => up("departmentName", e.target.value)}
         className="h-8 px-3 rounded-lg bg-slate-50 border border-border text-xs text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 cursor-pointer"
       >
         <option value="">Todos los departamentos</option>
@@ -92,26 +116,16 @@ export const UserFilterBar = ({
           </option>
         ))}
       </select>
-      {(filters.search ||
-        filters.role ||
-        filters.status ||
-        filters.branch ||
-        filters.department) && (
+
+      {hasActiveFilters && (
         <button
-          onClick={() =>
-            setFilters({
-              search: "",
-              role: "",
-              status: "",
-              branch: "",
-              department: "",
-            })
-          }
+          onClick={clearFilters}
           className="h-8 px-3 rounded-lg border border-border text-xs font-medium text-slate-500 hover:bg-slate-50 flex items-center gap-1.5 transition-colors"
         >
           <X size={12} /> Limpiar
         </button>
       )}
+
       <button
         onClick={onCreateUser}
         className="h-8 px-4 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 flex items-center gap-1.5 transition-colors shadow-sm ml-auto"

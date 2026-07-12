@@ -1,56 +1,36 @@
 // ─── User Edit/Create Modal ───────────────────────────────────────────────────
 
 import {
-  Search,
-  Users,
   AlertTriangle,
   XCircle,
   X,
-  Plus,
   CheckCircle2,
-  TrendingUp,
-  TrendingDown,
   Save,
   Eye,
-  UserCog,
   ShieldCheck,
   QrCode,
   Paperclip,
   Lock,
   Briefcase,
   UserCheck,
-  UserX,
-  Edit3,
-  PauseCircle,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Avatar } from "./Avatar";
 import { Toggle } from "./Toggle";
+import { UserRecord } from "../../../types";
 
 type ModalTab = "personal" | "work" | "account";
 
 type UserStatus = "ACTIVE" | "INACTIVE" | "VACATION" | "SUSPENDED";
 type UserRole = "admin" | "manager" | "employee";
 
-interface UserRecord {
-  id: string;
-  fullName: string;
-  email: string;
-  username: string;
-  employeeCode: string;
-  role: UserRole;
-  status: UserStatus;
-  branchName: string;
-  department: string;
-  position: string;
-  phone: string;
-  document: string;
-  hireDate: string;
-  lastLogin: string;
-  isActive: boolean;
-  initials: string;
-  avatarColor: string;
+interface UserModalProps {
+  user: UserRecord | null;
+  isCreate: boolean;
+  currentAdminId: number;
+  onClose: () => void;
+  onSave: (u: UserRecord) => void;
+  addToast: (m: string, t: "success" | "error") => void;
 }
 
 const BRANCHES = ["Sede Central Lima", "Sede Norte", "Sede Sur"];
@@ -71,16 +51,40 @@ export const UserModal = ({
   onClose,
   onSave,
   addToast,
-}: {
-  user: UserRecord | null;
-  isCreate: boolean;
-  currentAdminId: string;
-  onClose: () => void;
-  onSave: (u: UserRecord) => void;
-  addToast: (m: string, t: "success" | "error") => void;
-}) => {
+}: UserModalProps) => {
+  // Función para obtener iniciales
+  const getInitials = (fullName: string): string => {
+    return fullName
+      .split(" ")
+      .slice(0, 2)
+      .map((w) => w[0] || "")
+      .join("")
+      .toUpperCase();
+  };
+
+  // Colores de avatar basados en el nombre
+  const getAvatarColor = (name: string): string => {
+    const colors = [
+      "#2563EB",
+      "#7C3AED",
+      "#16A34A",
+      "#DC2626",
+      "#F59E0B",
+      "#0891B2",
+      "#BE185D",
+      "#EA580C",
+      "#0284C7",
+      "#059669",
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
   const blank: UserRecord = {
-    id: `u${Date.now()}`,
+    id: 0,
     fullName: "",
     email: "",
     username: "",
@@ -88,16 +92,20 @@ export const UserModal = ({
     role: "employee",
     status: "ACTIVE",
     branchName: BRANCHES[0],
-    department: DEPARTMENTS[0],
-    position: "",
+    departmentName: DEPARTMENTS[0],
+    positionName: "",
     phone: "",
-    document: "",
+    documentNumber: "",
     hireDate: "",
-    lastLogin: "—",
+    lastLogin: null,
     isActive: true,
-    initials: "??",
-    avatarColor: "#64748B",
+    createdAt: new Date().toISOString(),
   };
+
+  // Avatar para el header
+  const avatarInitials = getInitials(user?.fullName || "");
+  const avatarColor = getAvatarColor(user?.fullName || "");
+
   const [form, setForm] = useState<UserRecord>(user ?? blank);
   const [tab, setTab] = useState<ModalTab>("personal");
   const [newPassword, setNewPassword] = useState("");
@@ -111,15 +119,6 @@ export const UserModal = ({
     setForm((f) => ({
       ...f,
       [k]: v,
-      initials:
-        k === "fullName"
-          ? (v as string)
-              .split(" ")
-              .slice(0, 2)
-              .map((w) => w[0] ?? "")
-              .join("")
-              .toUpperCase() || f.initials
-          : f.initials,
     }));
   };
 
@@ -152,7 +151,11 @@ export const UserModal = ({
   };
 
   const tabs: { id: ModalTab; label: string; icon: React.ReactNode }[] = [
-    { id: "personal", label: "Datos personales", icon: <Users size={13} /> },
+    {
+      id: "personal",
+      label: "Datos personales",
+      icon: <UserCheck size={13} />,
+    },
     { id: "work", label: "Datos laborales", icon: <Briefcase size={13} /> },
     {
       id: "account",
@@ -239,7 +242,12 @@ export const UserModal = ({
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-border flex items-center gap-4 bg-slate-50 flex-shrink-0">
-          <Avatar user={form} size="md" />
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
+            style={{ backgroundColor: avatarColor }}
+          >
+            {avatarInitials || "?"}
+          </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-slate-800">
               {isCreate ? "Nuevo usuario" : form.fullName || "Editar usuario"}
@@ -251,7 +259,6 @@ export const UserModal = ({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* QR Button */}
             {!isCreate && (
               <button
                 onClick={handleSendQR}
@@ -260,7 +267,6 @@ export const UserModal = ({
                 <QrCode size={13} /> Enviar QR
               </button>
             )}
-            {/* Attach file */}
             {!isCreate && (
               <>
                 <input
@@ -287,7 +293,6 @@ export const UserModal = ({
           </button>
         </div>
 
-        {/* File badge */}
         {fileAttached && (
           <div className="mx-6 mt-3 flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-xs text-green-700">
             <Paperclip size={12} />
@@ -347,15 +352,15 @@ export const UserModal = ({
                   </Field>
                   <Field label="Teléfono">
                     <Input
-                      value={form.phone}
+                      value={form.phone || ""}
                       onChange={(v) => up("phone", v)}
                       placeholder="+51 999 000 111"
                     />
                   </Field>
                   <Field label="Documento de identidad">
                     <Input
-                      value={form.document}
-                      onChange={(v) => up("document", v)}
+                      value={form.documentNumber || ""}
+                      onChange={(v) => up("documentNumber", v)}
                       placeholder="DNI 12345678"
                     />
                   </Field>
@@ -382,30 +387,30 @@ export const UserModal = ({
                   </Field>
                   <Field label="Fecha de contratación">
                     <Input
-                      value={form.hireDate}
+                      value={form.hireDate || ""}
                       onChange={(v) => up("hireDate", v)}
                       placeholder="dd/mm/aaaa"
                     />
                   </Field>
                   <Field label="Sucursal">
                     <Select
-                      value={form.branchName}
+                      value={form.branchName || ""}
                       onChange={(v) => up("branchName", v)}
                       options={BRANCHES.map((b) => ({ value: b, label: b }))}
                     />
                   </Field>
                   <Field label="Departamento">
                     <Select
-                      value={form.department}
-                      onChange={(v) => up("department", v)}
+                      value={form.departmentName || ""}
+                      onChange={(v) => up("departmentName", v)}
                       options={DEPARTMENTS.map((d) => ({ value: d, label: d }))}
                     />
                   </Field>
                   <div className="col-span-2">
                     <Field label="Cargo / Puesto">
                       <Input
-                        value={form.position}
-                        onChange={(v) => up("position", v)}
+                        value={form.positionName || ""}
+                        onChange={(v) => up("positionName", v)}
                         placeholder="Ej: Analista de Sistemas"
                       />
                     </Field>

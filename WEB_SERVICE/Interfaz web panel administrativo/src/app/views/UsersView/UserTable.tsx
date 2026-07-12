@@ -1,40 +1,31 @@
-import { Edit3, UserCheck, Users, UserX } from "lucide-react";
+import { Edit3, UserCheck, Users, UserX, Loader2 } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { RoleChip } from "./RoleChip";
 import { UserStatusChip } from "./UserStatusChip";
+import { UserRecord } from "../../../types";
 
 // ─── User Table ───────────────────────────────────────────────────────────────
-type UserStatus = "ACTIVE" | "INACTIVE" | "VACATION" | "SUSPENDED";
-type UserRole = "admin" | "manager" | "employee";
-
-interface UserRecord {
-  id: string;
-  fullName: string;
-  email: string;
-  username: string;
-  employeeCode: string;
-  role: UserRole;
-  status: UserStatus;
-  branchName: string;
-  department: string;
-  position: string;
-  phone: string;
-  document: string;
-  hireDate: string;
-  lastLogin: string;
-  isActive: boolean;
-  initials: string;
-  avatarColor: string;
-}
 
 interface UserTableProps {
   users: UserRecord[];
   onEdit: (u: UserRecord) => void;
   onToggleActive: (u: UserRecord) => void;
-  currentAdminId: string;
+  currentAdminId: number;
   onLoadMore?: () => void;
   hasMore?: boolean;
+  loading?: boolean;
+  loadingMore?: boolean;
 }
+
+// Función para obtener iniciales
+const getInitials = (fullName: string): string => {
+  return fullName
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0] || "")
+    .join("")
+    .toUpperCase();
+};
 
 export const UserTable = ({
   users,
@@ -43,10 +34,23 @@ export const UserTable = ({
   currentAdminId,
   onLoadMore,
   hasMore = false,
+  loading = false,
+  loadingMore = false,
 }: UserTableProps) => {
+  if (loading && users.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-border h-full flex flex-col items-center justify-center gap-3 py-16">
+        <Loader2 size={32} className="text-blue-600 animate-spin" />
+        <p className="text-sm font-semibold text-slate-600">
+          Cargando usuarios...
+        </p>
+      </div>
+    );
+  }
+
   if (users.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-border h-full flex flex-col items-center justify-center gap-3">
+      <div className="bg-white rounded-2xl border border-border h-full flex flex-col items-center justify-center gap-3 py-16">
         <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center">
           <Users size={26} className="text-slate-300" />
         </div>
@@ -75,6 +79,7 @@ export const UserTable = ({
       <div className="flex-1 overflow-y-auto divide-y divide-border">
         {users.map((u) => {
           const isSelf = u.id === currentAdminId;
+          const initials = getInitials(u.fullName);
 
           return (
             <div
@@ -85,7 +90,7 @@ export const UserTable = ({
               <div className="flex items-start gap-4 w-full">
                 {/* Avatar */}
                 <div className="relative shrink-0 mt-0.5">
-                  <Avatar user={u} size="md" />
+                  <Avatar initials={initials} size="md" />
 
                   <span
                     className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
@@ -172,12 +177,21 @@ export const UserTable = ({
       {/* Ver más */}
       {hasMore && onLoadMore && (
         <div className="px-6 py-4 border-t border-border bg-slate-50">
-          <button
-            onClick={onLoadMore}
-            className="w-full py-2.5 rounded-lg text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-100 transition-colors"
-          >
-            Ver más usuarios
-          </button>
+          {loadingMore ? (
+            <div className="flex items-center justify-center gap-2 py-2">
+              <Loader2 size={18} className="text-blue-600 animate-spin" />
+              <span className="text-sm font-medium text-slate-500">
+                Cargando más usuarios...
+              </span>
+            </div>
+          ) : (
+            <button
+              onClick={onLoadMore}
+              className="w-full py-2.5 rounded-lg text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-100 transition-colors"
+            >
+              Ver más usuarios
+            </button>
+          )}
         </div>
       )}
     </div>

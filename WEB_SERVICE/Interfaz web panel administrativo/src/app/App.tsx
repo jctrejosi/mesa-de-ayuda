@@ -81,7 +81,6 @@ const Sidebar = ({
   setView: (v: ViewType) => void;
 }) => {
   const comercialItems = [
-    { id: "sales", label: "Ventas", icon: BarChart2 },
     { id: "inventory", label: "Inventario", icon: Package },
   ];
 
