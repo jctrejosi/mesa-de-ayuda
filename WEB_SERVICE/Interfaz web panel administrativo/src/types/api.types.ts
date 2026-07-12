@@ -167,6 +167,9 @@ export interface UserRecord {
   branchName: string | null;
   departmentName: string | null;
   positionName: string | null;
+  branchId?: number | null;
+  departmentId?: number | null;
+  positionId?: number | null;
   phone: string | null;
   documentNumber: string | null;
   hireDate: string | null;

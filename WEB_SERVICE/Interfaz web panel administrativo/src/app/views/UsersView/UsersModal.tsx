@@ -14,13 +14,17 @@ import {
   Briefcase,
   UserCheck,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Toggle } from "./Toggle";
 import { UserRecord } from "../../../types";
+import {
+  Branch,
+  Department,
+  Position,
+} from "../../../services/company.service";
 
 type ModalTab = "personal" | "work" | "account";
-
 type UserStatus = "ACTIVE" | "INACTIVE" | "VACATION" | "SUSPENDED";
 type UserRole = "admin" | "manager" | "employee";
 
@@ -28,31 +32,87 @@ interface UserModalProps {
   user: UserRecord | null;
   isCreate: boolean;
   currentAdminId: number;
+  branches: Branch[];
+  departments: Department[];
+  positions: Position[];
   onClose: () => void;
-  onSave: (u: UserRecord) => void;
+  onSave: (u: UserRecord, password?: string) => void;
   addToast: (m: string, t: "success" | "error") => void;
 }
 
-const BRANCHES = ["Sede Central Lima", "Sede Norte", "Sede Sur"];
-const DEPARTMENTS = [
-  "Tecnología",
-  "Operaciones",
-  "Recursos Humanos",
-  "Finanzas",
-  "Diseño",
-  "Administración",
-  "Ventas",
-];
+const Field = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <div>
+    <label className="text-xs font-medium text-slate-500 block mb-1.5">
+      {label}
+    </label>
+    {children}
+  </div>
+);
+
+const Input = ({
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  mono = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  mono?: boolean;
+}) => {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={`w-full h-9 px-3 rounded-lg border border-border bg-slate-50 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 transition-all placeholder:text-slate-300 ${mono ? "font-mono" : ""}`}
+    />
+  );
+};
+
+const Select = ({
+  value,
+  onChange,
+  options,
+}: {
+  value: number | null | string;
+  onChange: (v: number) => void;
+  options: { id: number; name: string }[];
+}) => (
+  <select
+    value={value ?? ""}
+    onChange={(e) => onChange(Number(e.target.value))}
+    className="w-full h-9 px-3 rounded-lg border border-border bg-slate-50 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 cursor-pointer"
+  >
+    <option value="">Seleccionar...</option>
+    {options.map((o) => (
+      <option key={o.id} value={o.id}>
+        {o.name}
+      </option>
+    ))}
+  </select>
+);
 
 export const UserModal = ({
   user,
   isCreate,
   currentAdminId,
+  branches,
+  departments,
+  positions,
   onClose,
   onSave,
   addToast,
 }: UserModalProps) => {
-  // Función para obtener iniciales
   const getInitials = (fullName: string): string => {
     return fullName
       .split(" ")
@@ -62,7 +122,6 @@ export const UserModal = ({
       .toUpperCase();
   };
 
-  // Colores de avatar basados en el nombre
   const getAvatarColor = (name: string): string => {
     const colors = [
       "#2563EB",
@@ -83,30 +142,132 @@ export const UserModal = ({
     return colors[Math.abs(hash) % colors.length];
   };
 
-  const blank: UserRecord = {
-    id: 0,
-    fullName: "",
-    email: "",
-    username: "",
-    employeeCode: "",
-    role: "employee",
-    status: "ACTIVE",
-    branchName: BRANCHES[0],
-    departmentName: DEPARTMENTS[0],
-    positionName: "",
-    phone: "",
-    documentNumber: "",
-    hireDate: "",
-    lastLogin: null,
-    isActive: true,
-    createdAt: new Date().toISOString(),
+  // Crear blank con useMemo para evitar recreaciones innecesarias
+  const blank = useMemo<UserRecord>(
+    () => ({
+      id: 0,
+      fullName: "",
+      email: "",
+      username: "",
+      employeeCode: "",
+      role: "employee",
+      status: "ACTIVE",
+      branchName: branches[0]?.name || "",
+      departmentName: departments[0]?.name || "",
+      positionName: positions[0]?.name || "",
+      branchId: branches[0]?.id || null,
+      departmentId: departments[0]?.id || null,
+      positionId: positions[0]?.id || null,
+      phone: "",
+      documentNumber: "",
+      hireDate: "",
+      lastLogin: null,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    }),
+    [branches, departments, positions],
+  );
+
+  // Estado del formulario - se inicializa con user o blank
+  const [form, setForm] = useState<UserRecord>(() => {
+    if (user) return user;
+    return blank;
+  });
+
+  // Ref para controlar que el mapeo de IDs se ejecute solo una vez
+  const initializedRef = useRef(false);
+
+  // Ref para guardar el ID del usuario actual y detectar cambios
+  const currentUserIdRef = useRef<number | null>(user?.id ?? null);
+
+  // ✅ Efecto para mapear IDs a partir de nombres SOLO UNA VEZ al abrir el modal
+  useEffect(() => {
+    // Si no hay usuario o ya se inicializó, no hacer nada
+    if (!user || initializedRef.current) return;
+
+    // Si las listas aún no están cargadas, esperar
+    if (
+      branches.length === 0 ||
+      departments.length === 0 ||
+      positions.length === 0
+    ) {
+      return;
+    }
+
+    // Mapear IDs
+    let branchId = user.branchId;
+    if (user.branchName && !branchId) {
+      const found = branches.find((b) => b.name === user.branchName);
+      branchId = found?.id || null;
+    }
+    let departmentId = user.departmentId;
+    if (user.departmentName && !departmentId) {
+      const found = departments.find((d) => d.name === user.departmentName);
+      departmentId = found?.id || null;
+    }
+    let positionId = user.positionId;
+    if (user.positionName && !positionId) {
+      const found = positions.find((p) => p.name === user.positionName);
+      positionId = found?.id || null;
+    }
+
+    // Solo actualizar si hay cambios
+    setForm((prev) => ({
+      ...prev,
+      branchId: branchId ?? prev.branchId,
+      departmentId: departmentId ?? prev.departmentId,
+      positionId: positionId ?? prev.positionId,
+    }));
+
+    // Marcar como inicializado
+    initializedRef.current = true;
+  }, [user, branches, departments, positions]);
+
+  // ✅ Efecto para resetear la inicialización cuando se cierra el modal o cambia el usuario
+  useEffect(() => {
+    // Si el usuario cambia (diferente ID), resetear la inicialización
+    const newUserId = user?.id ?? null;
+    if (newUserId !== currentUserIdRef.current) {
+      initializedRef.current = false;
+      currentUserIdRef.current = newUserId;
+      // Si el usuario cambia, actualizar el formulario con el nuevo usuario
+      if (user) {
+        setForm(user);
+      } else {
+        setForm(blank);
+      }
+    }
+  }, [user, blank]);
+
+  // El resto de handlers y funciones
+  const up = (k: keyof UserRecord, v: string | boolean | number | null) => {
+    setForm((f) => {
+      return {
+        ...f,
+        [k]: v,
+      };
+    });
   };
 
-  // Avatar para el header
-  const avatarInitials = getInitials(user?.fullName || "");
-  const avatarColor = getAvatarColor(user?.fullName || "");
+  const handleBranchChange = (id: number) => {
+    const branch = branches.find((b) => b.id === id);
+    setForm((f) => ({ ...f, branchId: id, branchName: branch?.name || null }));
+  };
 
-  const [form, setForm] = useState<UserRecord>(user ?? blank);
+  const handleDepartmentChange = (id: number) => {
+    const dept = departments.find((d) => d.id === id);
+    setForm((f) => ({
+      ...f,
+      departmentId: id,
+      departmentName: dept?.name || null,
+    }));
+  };
+
+  const handlePositionChange = (id: number) => {
+    const pos = positions.find((p) => p.id === id);
+    setForm((f) => ({ ...f, positionId: id, positionName: pos?.name || null }));
+  };
+
   const [tab, setTab] = useState<ModalTab>("personal");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -115,30 +276,23 @@ export const UserModal = ({
   const fileRef = useRef<HTMLInputElement>(null);
   const isSelf = form.id === currentAdminId;
 
-  const up = (k: keyof UserRecord, v: string | boolean) => {
-    setForm((f) => ({
-      ...f,
-      [k]: v,
-    }));
-  };
+  const avatarInitials = getInitials(user?.fullName || "");
+  const avatarColor = getAvatarColor(user?.fullName || "");
 
   const handleSave = () => {
     if (!form.fullName || !form.email) {
       addToast("Nombre y email son obligatorios", "error");
       return;
     }
+    if (isCreate && !newPassword) {
+      addToast("La contraseña es obligatoria para nuevos usuarios", "error");
+      return;
+    }
     if (newPassword && newPassword !== confirmPassword) {
       addToast("Las contraseñas no coinciden", "error");
       return;
     }
-    onSave(form);
-    addToast(
-      isCreate
-        ? "Usuario creado exitosamente"
-        : "Usuario actualizado exitosamente",
-      "success",
-    );
-    onClose();
+    onSave(form, isCreate ? newPassword : undefined);
   };
 
   const handleSendQR = () => addToast(`QR enviado a ${form.email}`, "success");
@@ -163,65 +317,6 @@ export const UserModal = ({
       icon: <ShieldCheck size={13} />,
     },
   ];
-
-  const Field = ({
-    label,
-    children,
-  }: {
-    label: string;
-    children: React.ReactNode;
-  }) => (
-    <div>
-      <label className="text-xs font-medium text-slate-500 block mb-1.5">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-
-  const Input = ({
-    value,
-    onChange,
-    placeholder,
-    type = "text",
-    mono = false,
-  }: {
-    value: string;
-    onChange: (v: string) => void;
-    placeholder?: string;
-    type?: string;
-    mono?: boolean;
-  }) => (
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className={`w-full h-9 px-3 rounded-lg border border-border bg-slate-50 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 transition-all placeholder:text-slate-300 ${mono ? "font-mono" : ""}`}
-    />
-  );
-
-  const Select = ({
-    value,
-    onChange,
-    options,
-  }: {
-    value: string;
-    onChange: (v: string) => void;
-    options: { value: string; label: string }[];
-  }) => (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full h-9 px-3 rounded-lg border border-border bg-slate-50 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 cursor-pointer"
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  );
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -312,7 +407,11 @@ export const UserModal = ({
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium border-b-2 transition-colors -mb-px ${tab === t.id ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium border-b-2 transition-colors -mb-px ${
+                tab === t.id
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
             >
               {t.icon}
               {t.label}
@@ -367,6 +466,7 @@ export const UserModal = ({
                 </div>
               </motion.div>
             )}
+
             {tab === "work" && (
               <motion.div
                 key="work"
@@ -394,30 +494,31 @@ export const UserModal = ({
                   </Field>
                   <Field label="Sucursal">
                     <Select
-                      value={form.branchName || ""}
-                      onChange={(v) => up("branchName", v)}
-                      options={BRANCHES.map((b) => ({ value: b, label: b }))}
+                      value={form.branchId ?? ""}
+                      onChange={handleBranchChange}
+                      options={branches}
                     />
                   </Field>
                   <Field label="Departamento">
                     <Select
-                      value={form.departmentName || ""}
-                      onChange={(v) => up("departmentName", v)}
-                      options={DEPARTMENTS.map((d) => ({ value: d, label: d }))}
+                      value={form.departmentId ?? ""}
+                      onChange={handleDepartmentChange}
+                      options={departments}
                     />
                   </Field>
                   <div className="col-span-2">
                     <Field label="Cargo / Puesto">
-                      <Input
-                        value={form.positionName || ""}
-                        onChange={(v) => up("positionName", v)}
-                        placeholder="Ej: Analista de Sistemas"
+                      <Select
+                        value={form.positionId ?? ""}
+                        onChange={handlePositionChange}
+                        options={positions}
                       />
                     </Field>
                   </div>
                 </div>
               </motion.div>
             )}
+
             {tab === "account" && (
               <motion.div
                 key="account"
@@ -443,10 +544,11 @@ export const UserModal = ({
                         !isSelf && up("role", e.target.value as UserRole)
                       }
                       disabled={isSelf}
-                      title={
-                        isSelf ? "No puedes cambiar tu propio rol" : undefined
-                      }
-                      className={`w-full h-9 px-3 rounded-lg border border-border bg-slate-50 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 ${isSelf ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                      className={`w-full h-9 px-3 rounded-lg border border-border bg-slate-50 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 ${
+                        isSelf
+                          ? "opacity-50 cursor-not-allowed"
+                          : "cursor-pointer"
+                      }`}
                     >
                       <option value="admin">Admin</option>
                       <option value="manager">Manager</option>
@@ -460,16 +562,18 @@ export const UserModal = ({
                     )}
                   </Field>
                   <Field label="Estado">
-                    <Select
+                    <select
                       value={form.status}
-                      onChange={(v) => up("status", v as UserStatus)}
-                      options={[
-                        { value: "ACTIVE", label: "Activo" },
-                        { value: "INACTIVE", label: "Inactivo" },
-                        { value: "VACATION", label: "Vacaciones" },
-                        { value: "SUSPENDED", label: "Suspendido" },
-                      ]}
-                    />
+                      onChange={(e) =>
+                        up("status", e.target.value as UserStatus)
+                      }
+                      className="w-full h-9 px-3 rounded-lg border border-border bg-slate-50 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 cursor-pointer"
+                    >
+                      <option value="ACTIVE">Activo</option>
+                      <option value="INACTIVE">Inactivo</option>
+                      <option value="VACATION">Vacaciones</option>
+                      <option value="SUSPENDED">Suspendido</option>
+                    </select>
                   </Field>
                   <Field label="Cuenta activa">
                     <div className="flex items-center gap-3 h-9">

@@ -8,8 +8,12 @@ import { UserTable } from "./UserTable";
 import { UserModal } from "./UsersModal";
 import { UserFilters, UserRecord } from "../../../types";
 import { usersService } from "../../../services/users.service";
-
-// ─── Users View ───────────────────────────────────────────────────────────────
+import {
+  companyService,
+  Branch,
+  Department,
+  Position,
+} from "../../../services/company.service";
 
 export const UsersView = () => {
   const [users, setUsers] = useState<UserRecord[]>([]);
@@ -23,8 +27,11 @@ export const UsersView = () => {
   });
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [loadingLists, setLoadingLists] = useState(true);
 
-  // Estado de paginación
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -32,9 +39,31 @@ export const UsersView = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const limit = 10; // Items por página
+  const limit = 10;
 
-  // Función para cargar usuarios (resetea la lista si cambian los filtros)
+  // Cargar listas de company
+  useEffect(() => {
+    const loadLists = async () => {
+      try {
+        const [branchesData, departmentsData, positionsData] =
+          await Promise.all([
+            companyService.getBranches(),
+            companyService.getDepartments(),
+            companyService.getPositions(),
+          ]);
+        setBranches(branchesData);
+        setDepartments(departmentsData);
+        setPositions(positionsData);
+      } catch (err) {
+        console.error("Error loading company lists:", err);
+      } finally {
+        setLoadingLists(false);
+      }
+    };
+    loadLists();
+  }, []);
+
+  // Cargar usuarios
   const loadUsers = useCallback(
     async (resetPage = true) => {
       const currentPage = resetPage ? 1 : page;
@@ -48,13 +77,11 @@ export const UsersView = () => {
           page: currentPage,
           limit,
         });
-
         if (resetPage) {
           setUsers(response.users);
         } else {
           setUsers((prev) => [...prev, ...response.users]);
         }
-
         setTotal(response.total);
         setTotalPages(response.totalPages);
         setPage(response.page);
@@ -68,7 +95,6 @@ export const UsersView = () => {
     [filters, page, limit],
   );
 
-  // Cargar cuando cambian los filtros
   useEffect(() => {
     loadUsers(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,31 +106,78 @@ export const UsersView = () => {
     }
   };
 
-  const handleToggleActive = (u: UserRecord) => {
-    // Reemplazar con la lógica del backend cuando esté lista
-    setUsers((prev) =>
-      prev.map((x) =>
-        x.id === u.id
-          ? {
-              ...x,
-              isActive: !x.isActive,
-              status: !x.isActive ? "ACTIVE" : "INACTIVE",
-            }
-          : x,
-      ),
-    );
+  // En UsersView, agrega esto para manejar toasts
+  const addToast = (message: string, type: "success" | "error") => {
+    // TODO: Implementar con un sistema de notificaciones (react-hot-toast, sonner, etc.)
+    console.log(`[${type}] ${message}`);
+    // Si usas react-hot-toast:
+    // if (type === 'success') toast.success(message);
+    // else toast.error(message);
   };
 
-  const handleSaveUser = (updated: UserRecord) => {
-    setUsers((prev) => {
-      const exists = prev.find((x) => x.id === updated.id);
-      return exists
-        ? prev.map((x) => (x.id === updated.id ? updated : x))
-        : [...prev, updated];
-    });
+  // ✅ Guardar usuario (crear o editar)
+  const handleSaveUser = async (updated: UserRecord, password?: string) => {
+    try {
+      let savedUser: UserRecord;
+      if (isCreating) {
+        if (!password) {
+          addToast(
+            "La contraseña es obligatoria para nuevos usuarios",
+            "error",
+          );
+          return;
+        }
+        savedUser = await usersService.create({
+          ...updated,
+          password,
+        });
+        // ✅ Actualizar la lista después de crear
+        await loadUsers(true);
+      } else {
+        savedUser = await usersService.update(updated.id, updated);
+        setUsers((prev) =>
+          prev.map((u) => (u.id === savedUser.id ? savedUser : u)),
+        );
+      }
+
+      // Cerrar modal
+      setEditingUser(null);
+      setIsCreating(false);
+      addToast(
+        isCreating
+          ? "Usuario creado exitosamente"
+          : "Usuario actualizado exitosamente",
+        "success",
+      );
+    } catch (err: any) {
+      console.error("Error saving user:", err);
+      const message =
+        err.response?.data?.message ||
+        err.message ||
+        "Error al guardar el usuario";
+      addToast(message, "error");
+    }
   };
 
-  // KPI counts
+  const handleToggleActive = async (u: UserRecord) => {
+    try {
+      const result = await usersService.toggleStatus(u.id);
+      setUsers((prev) =>
+        prev.map((x) =>
+          x.id === u.id
+            ? {
+                ...x,
+                isActive: result.active,
+                status: result.active ? "ACTIVE" : "INACTIVE",
+              }
+            : x,
+        ),
+      );
+    } catch (err) {
+      console.error("Error toggling status:", err);
+    }
+  };
+
   const activeCount = users.filter((u) => u.status === "ACTIVE").length;
   const inactiveCount = users.filter(
     (u) => u.status === "INACTIVE" || u.status === "SUSPENDED",
@@ -180,7 +253,7 @@ export const UsersView = () => {
         users={users}
         onEdit={setEditingUser}
         onToggleActive={handleToggleActive}
-        currentAdminId={Number("")}
+        currentAdminId={0} // reemplazar con el ID del admin logueado
         onLoadMore={loadMore}
         hasMore={page < totalPages}
         loadingMore={loadingMore}
@@ -194,10 +267,12 @@ export const UsersView = () => {
             key="user-modal"
             user={isCreating ? null : editingUser}
             isCreate={isCreating}
-            currentAdminId={Number("")}
+            currentAdminId={0}
+            branches={branches}
+            departments={departments}
+            positions={positions}
             onClose={() => {
               setEditingUser(null);
-              setIsCreating(false);
             }}
             onSave={handleSaveUser}
             addToast={() => {}}

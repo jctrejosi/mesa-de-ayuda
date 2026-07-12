@@ -5,6 +5,7 @@ import type {
   CreateUserRequest,
   UpdateUserRequest,
   UserFilters,
+  UserRecord,
 } from "../types";
 
 export const usersService = {
@@ -31,20 +32,58 @@ export const usersService = {
   /**
    * Crear un nuevo usuario
    */
-  async create(data: CreateUserRequest): Promise<UserWithRelations> {
-    const response = await api.post<UserWithRelations>("/users", data);
-    return response.data;
+  async create(
+    data: Partial<UserRecord> & { password: string },
+  ): Promise<UserRecord> {
+    const payload = {
+      firstName: data.fullName?.split(" ")[0] || "",
+      lastName: data.fullName?.split(" ").slice(1).join(" ") || "",
+      username: data.username || "",
+      password: data.password || "",
+      email: data.email || "",
+      employeeCode: data.employeeCode || "",
+      role: data.role || "employee",
+      status: data.status || "ACTIVE",
+      branchId: data.branchId || null,
+      departmentId: data.departmentId || null,
+      positionId: data.positionId || null,
+      phone: data.phone || null,
+      documentNumber: data.documentNumber || null,
+      hireDate: data.hireDate || null,
+      active: data.isActive !== undefined ? data.isActive : true,
+    };
+    const response = await api.post("/users", payload);
+    return response.data.data || response.data;
   },
 
   /**
    * Actualizar un usuario
    */
-  async update(
-    id: number,
-    data: UpdateUserRequest,
-  ): Promise<UserWithRelations> {
-    const response = await api.put<UserWithRelations>(`/users/${id}`, data);
-    return response.data;
+  async update(id: number, data: Partial<UserRecord>): Promise<UserRecord> {
+    const payload = {
+      firstName: data.fullName?.split(" ")[0],
+      lastName: data.fullName?.split(" ").slice(1).join(" "),
+      username: data.username,
+      email: data.email,
+      employeeCode: data.employeeCode,
+      role: data.role,
+      status: data.status,
+      branchId: data.branchId,
+      departmentId: data.departmentId,
+      positionId: data.positionId,
+      phone: data.phone,
+      documentNumber: data.documentNumber,
+      hireDate: data.hireDate,
+      active: data.isActive,
+    };
+    // Eliminar campos undefined para no sobrescribir con null
+    Object.keys(payload).forEach((key) => {
+      if (payload[key as keyof typeof payload] === undefined) {
+        delete payload[key as keyof typeof payload];
+      }
+    });
+    const response = await api.put(`/users/${id}`, payload);
+    return response.data.data || response.data;
   },
 
   /**
