@@ -25,7 +25,7 @@ api.interceptors.response.use(
       localStorage.removeItem("access_token");
       localStorage.removeItem("user");
       // Si no estamos en login, redirigir
-      window.location.href = "http://localhost:5173"; // Cambia esto según tu ruta de login
+      window.location.href = import.meta.env.VITE_REDIRECT_LOGINs; // Cambia esto según tu ruta de login
     }
     return Promise.reject(error);
   },
