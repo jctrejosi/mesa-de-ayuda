@@ -102,7 +102,7 @@ export const ManualModal = ({
                   onClick={() => setForm({ ...form, type: t })}
                   className={`flex-1 h-9 rounded-lg text-xs font-medium border transition-colors ${form.type === t ? "bg-blue-600 border-blue-600 text-white" : "bg-slate-50 border-border text-slate-600 hover:bg-slate-100"}`}
                 >
-                  {t === "entry" ? "Entrada" : "Salida"}
+                  {t === "ENTRY" ? "Entrada" : "Salida"}
                 </button>
               ))}
             </div>

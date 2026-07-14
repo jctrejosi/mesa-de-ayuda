@@ -39,8 +39,8 @@ export const RecordTypeChip = ({ type }: { type: RecordType }) => (
   <span
     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${type === "entry" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}
   >
-    {type === "entry" ? <LogIn size={11} /> : <LogOut size={11} />}
-    {type === "entry" ? "Entrada" : "Salida"}
+    {type === "ENTRY" ? <LogIn size={11} /> : <LogOut size={11} />}
+    {type === "ENTRY" ? "Entrada" : "Salida"}
   </span>
 );
 
