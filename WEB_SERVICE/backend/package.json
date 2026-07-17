@@ -39,7 +39,7 @@
     "bcryptjs": "3.0.3",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
-    "cloudinary": "^2.10.0",
+    "cloudinary": "2.10.0",
     "compression": "1.8.1",
     "cookie-parser": "1.4.7",
     "drizzle-orm": "0.45.2",
@@ -58,7 +58,7 @@
     "winston": "3.19.0"
   },
   "devDependencies": {
-    "@dotenvx/dotenvx": "^2.4.1",
+    "@dotenvx/dotenvx": "2.4.1",
     "@eslint/eslintrc": "3.3.5",
     "@eslint/js": "10.0.1",
     "@nestjs/schematics": "11.1.0",
