@@ -390,7 +390,7 @@
     enabled "2.0.x"
     kuler "^2.0.0"
 
-"@dotenvx/dotenvx@^2.4.1":
+"@dotenvx/dotenvx@2.4.1":
   version "2.4.1"
   resolved "https://registry.yarnpkg.com/@dotenvx/dotenvx/-/dotenvx-2.4.1.tgz#4c135198100670622aa3f814437e071547d715fc"
   integrity sha512-kwt04HYe8SmyYRPW6/nuM8+MSXav+hMEQvI7SRJTKdU0kM57lf/R7NvxvkC53OnWtTERN0v4DOShXn98ev3hfw==
@@ -2892,7 +2892,7 @@ clone@^1.0.2:
   resolved "https://registry.yarnpkg.com/clone/-/clone-1.0.4.tgz#da309cc263df15994c688ca902179ca3c7cd7c7e"
   integrity sha512-JQHZ2QMW6l3aH/j6xCqQThY/9OH4D/9ls34cgkUBiEeocRTU04tHfKPBsUK1PqZCUQM7GiA0IIXJSuXHI64Kbg==
 
-cloudinary@^2.10.0:
+cloudinary@2.10.0:
   version "2.10.0"
   resolved "https://registry.yarnpkg.com/cloudinary/-/cloudinary-2.10.0.tgz#38f159c3d85f7b5cfc56f3f6ff73be4b607ce44e"
   integrity sha512-sY09kYg7wprkndAOjZBAYqFZqwL+SxnEGcAvksOvFA+5upnFn949UjkEkHKNSwkBtW/xRDd0p6NgbSXZcxkI3w==
@@ -5368,9 +5368,9 @@ pure-rand@^7.0.0:
   integrity sha512-oTUZM/NAZS8p7ANR3SHh30kXB+zK2r2BPcEn/awJIbOvq82WoMN4p62AWWp3Hhw50G0xMsw1mhIBLqHw64EcNQ==
 
 qs@^6.14.0, qs@^6.14.1, qs@^6.15.2:
-  version "6.15.3"
-  resolved "https://registry.yarnpkg.com/qs/-/qs-6.15.3.tgz#76852132a58ed5c7c0ef67e4441b9bb5d6061b3b"
-  integrity sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==
+  version "6.16.0"
+  resolved "https://registry.yarnpkg.com/qs/-/qs-6.16.0.tgz#c22c723a28a920f3aacdce8289fabd43eccb79fd"
+  integrity sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==
   dependencies:
     es-define-property "^1.0.1"
     side-channel "^1.1.1"
